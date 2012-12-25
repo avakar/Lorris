@@ -10,7 +10,13 @@ class ShupitoConnection : public Connection
     Q_OBJECT
 
 public:
-    ShupitoConnection(ConnectionType type) : Connection(type) {}
+    ShupitoConnection(ConnectionType type)
+        : Connection(type), m_supportsDescriptor(true)
+    {
+    }
+
+    bool supportsDescriptor() const { return m_supportsDescriptor; }
+    virtual void setSupportsDescriptor(bool value) { m_supportsDescriptor = value; }
 
     virtual void requestDesc() = 0;
 
@@ -20,6 +26,9 @@ public slots:
 signals:
     void packetRead(ShupitoPacket const & packet);
     void descRead(ShupitoDesc const & desc);
+
+private:
+    bool m_supportsDescriptor;
 };
 
 class PortShupitoConnection : public ShupitoConnection
@@ -34,6 +43,8 @@ public:
 
     ConnectionPointer<PortConnection> const & port() const { return m_port; }
     void setPort(ConnectionPointer<PortConnection> const & port);
+
+    void setSupportsDescriptor(bool value);
 
     virtual void requestDesc();
 

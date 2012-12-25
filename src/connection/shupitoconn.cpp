@@ -65,7 +65,7 @@ void PortShupitoConnection::OpenConcurrent()
     }
     else
     {
-        m_parserState = pst_init0;
+        m_parserState = this->supportsDescriptor()? pst_init0: pst_discard;
         this->SetState(st_connected);
     }
 }
@@ -93,7 +93,7 @@ void PortShupitoConnection::portStateChanged(ConnectionState state)
     }
     else if (state == st_connected && this->state() == st_connecting)
     {
-        m_parserState = pst_init0;
+        m_parserState = this->supportsDescriptor()? pst_init0: pst_discard;
         this->SetState(st_connected);
     }
 }
@@ -243,4 +243,11 @@ void PortShupitoConnection::handlePacket(ShupitoPacket const & packet)
     {
         emit packetRead(packet);
     }
+}
+
+void PortShupitoConnection::setSupportsDescriptor(bool supported)
+{
+    this->ShupitoConnection::setSupportsDescriptor(supported);
+    if (!supported && m_parserState == pst_init0)
+        m_parserState = pst_discard;
 }

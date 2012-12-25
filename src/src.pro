@@ -141,7 +141,10 @@ SOURCES += ui/mainwindow.cpp \
     LorrisAnalyzer/undoactions.cpp \
     LorrisAnalyzer/filtertabwidget.cpp \
     LorrisAnalyzer/datafilter.cpp \
-    misc/qobjectpointer.cpp
+    misc/qobjectpointer.cpp \
+    LorrisOmicron/lorrisomicron.cpp \
+    LorrisOmicron/lorrisomicroninfo.cpp \
+    ui/digitaltracegraph.cpp
 
 HEADERS += ui/mainwindow.h \
     revision.h \
@@ -264,7 +267,10 @@ HEADERS += ui/mainwindow.h \
     LorrisAnalyzer/undoactions.h \
     LorrisAnalyzer/filtertabwidget.h \
     LorrisAnalyzer/datafilter.h \
-    misc/qobjectpointer.h
+    misc/qobjectpointer.h \
+    LorrisOmicron/lorrisomicron.h \
+    LorrisOmicron/lorrisomicroninfo.h \
+    ui/digitaltracegraph.h
 
 FORMS += \
     LorrisAnalyzer/sourcedialog.ui \
@@ -294,7 +300,8 @@ FORMS += \
     LorrisShupito/ui/fullshupitoui.ui \
     LorrisShupito/ui/overvccdialog.ui \
     LorrisShupito/ui/minishupitoui.ui \
-    LorrisAnalyzer/filterdialog.ui
+    LorrisAnalyzer/filterdialog.ui \
+    LorrisOmicron/lorrisomicron.ui
 
 RESOURCES += \
     LorrisAnalyzer/DataWidgetIcons.qrc \
