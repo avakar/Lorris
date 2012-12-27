@@ -67,6 +67,9 @@ private:
 
     std::vector<uint8_t> m_captured_data;
     void handle_captured_data();
+
+    void importTraces(QString const & fname);
+    void exportTraces(QString const & fname);
 };
 
 #endif // LORRISOMICRON_H

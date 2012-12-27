@@ -25,6 +25,17 @@ public:
         }
     };
 
+    struct sample_ptr
+    {
+        std::map<size_t, block_info>::const_iterator block_it;
+        size_t block_offset;
+        size_t repeat_index;
+        size_t repeat_offset;
+
+        bool first_repeat;
+        bool last_repeat;
+    };
+
     struct channel_data
     {
         std::map<size_t, block_info> blocks;
@@ -32,7 +43,9 @@ public:
 
         size_t length() const;
         bool sample(size_t index) const;
-        std::pair<size_t, size_t> multisample(size_t first, size_t last);
+        std::pair<bool, bool> multisample(size_t first, size_t last);
+
+        sample_ptr get_sample_ptr(size_t sample) const;
     };
 
     explicit DigitalTraceGraph(QWidget *parent = 0);

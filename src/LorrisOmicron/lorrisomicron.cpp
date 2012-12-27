@@ -42,22 +42,7 @@ LorrisOmicron::LorrisOmicron()
 
     this->updateUi();
 
-#if 1
-    // Push a bit of random data to a single channel for debugging
-    std::vector<DigitalTraceGraph::channel_data> channels;
-    channels.resize(1);
-    DigitalTraceGraph::channel_data & ch = channels[0];
-    ch.data.push_back(false);
-    ch.data.push_back(true);
-    ch.data.push_back(false);
-
-    ch.blocks[0] = DigitalTraceGraph::block_info(0, 1, 300);
-    ch.blocks[300] = DigitalTraceGraph::block_info(1, 1, 40);
-    ch.blocks[340] = DigitalTraceGraph::block_info(2, 1, 200);
-
-    ui->graph->setChannelData(channels);
-#endif
-
+    this->importTraces("../../etc/samples/pdi_init.omtr");
     ui->graph->zoomToAll();
 }
 
@@ -379,12 +364,15 @@ void LorrisOmicron::updateUi()
 
 void LorrisOmicron::on_actionExportTraces_triggered()
 {
-    QString fname = QFileDialog::getSaveFileName(this, QObject::tr("Export traces"), QString(), tr("Omicron traces (*.omtr)"));
+    QString selectedFilter;
+    QString fname = QFileDialog::getSaveFileName(this,
+        QObject::tr("Export traces"), QString(), tr("Omicron traces (*.omtr)"),
+        &selectedFilter);
     if (!fname.isEmpty())
     {
-        QFile fout(fname);
-        fout.open(QFile::WriteOnly | QFile::Truncate);
-        fout.write((char const *)m_captured_data.data(), m_captured_data.size());
+        if (!fname.mid(1).contains(QChar('.')))
+            fname = fname + ".omtr";
+        this->exportTraces(fname);
     }
 }
 
@@ -392,11 +380,21 @@ void LorrisOmicron::on_actionImportTraces_triggered()
 {
     QString fname = QFileDialog::getOpenFileName(this, QObject::tr("Import traces"), QString(), tr("Omicron traces (*.omtr)"));
     if (!fname.isEmpty())
-    {
-        QFile fin(fname);
-        fin.open(QFile::ReadOnly);
-        QByteArray data = fin.readAll();
-        m_captured_data.assign((uint8_t const *)data.data(), (uint8_t const *)data.data() + data.size());
-        this->handle_captured_data();
-    }
+        this->importTraces(fname);
+}
+
+void LorrisOmicron::importTraces(QString const & fname)
+{
+    QFile fin(fname);
+    fin.open(QFile::ReadOnly);
+    QByteArray data = fin.readAll();
+    m_captured_data.assign((uint8_t const *)data.data(), (uint8_t const *)data.data() + data.size());
+    this->handle_captured_data();
+}
+
+void LorrisOmicron::exportTraces(QString const & fname)
+{
+    QFile fout(fname);
+    fout.open(QFile::WriteOnly | QFile::Truncate);
+    fout.write((char const *)m_captured_data.data(), m_captured_data.size());
 }
