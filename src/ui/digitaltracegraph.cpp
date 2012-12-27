@@ -23,7 +23,7 @@ bool DigitalTraceGraph::channel_data::sample(size_t index) const
     return data[it->second.block_offset + index];
 }
 
-std::pair<bool, bool> DigitalTraceGraph::channel_data::multisample(size_t first, size_t last)
+std::pair<size_t, size_t> DigitalTraceGraph::channel_data::multisample(size_t first, size_t last)
 {
     std::map<size_t, block_info>::const_iterator it = blocks.upper_bound(first);
     Q_ASSERT(it != blocks.begin());
@@ -32,7 +32,7 @@ std::pair<bool, bool> DigitalTraceGraph::channel_data::multisample(size_t first,
     size_t f_count = 0;
     size_t t_count = 0;
 
-    size_t block_offset = index - it->first;
+    /*size_t block_offset = index - it->first;
     size_t repeat_index = block_offset / it->second.block_length;
 
     for (size_t i = block_offset % it->second.block_length; i < it->second.block_length; ++i)
@@ -61,7 +61,7 @@ std::pair<bool, bool> DigitalTraceGraph::channel_data::multisample(size_t first,
                 ++f;
         }
 
-        t *= it->second.repeat_count - repeat_index;
+        t *= it->second.repeat_ciount - repeat_index;
         f *= it->second.repeat_count - repeat_index;
 
         t_count += t;
@@ -71,13 +71,13 @@ std::pair<bool, bool> DigitalTraceGraph::channel_data::multisample(size_t first,
 
     for (; repeat_index < it->second.repeat_count; ++repeat_index)
     {
-    }
+    }*/
 
     return std::make_pair(f_count, t_count);
 }
 
-DigitalTraceGraph::DigitalTraceGraph(QWidget *parent) :
-    QWidget(parent)
+DigitalTraceGraph::DigitalTraceGraph(QWidget *parent)
+    : QWidget(parent), m_panx(0), m_samplesPerPixel(1.0)
 {
 }
 
@@ -99,24 +99,66 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
     int y = 0;
     for (size_t i = 0; i < m_channels.size(); ++i)
     {
-        size_t length = m_channels[i].length();
-        if (length == 0)
-            continue;
-
+        size_t channel_length = m_channels[i].length();
         int w = this->width();
+        bool have_last_point = false;
         QPoint last_point;
         for (int x = 0; x < w; ++x)
         {
-            size_t sample_pos = (size_t)((double)x*length/w);
-            bool sample = m_channels[i].sample(sample_pos);
+            double sample_pos = x*m_samplesPerPixel+m_panx;
+            if (sample_pos < 0 || sample_pos >= channel_length)
+                continue;
+
+            bool sample = m_channels[i].sample((size_t)sample_pos);
 
             int yy = y + (sample? row_padding: row_height - row_padding);
             QPoint pt(x, yy);
-            if (x != 0)
+            if (have_last_point)
                 p.drawLine(last_point, pt);
             last_point = pt;
+            have_last_point = true;
         }
 
         y += row_height;
     }
+}
+
+void DigitalTraceGraph::zoomToAll()
+{
+    size_t max_length = 0;
+    for (size_t i = 0; i < m_channels.size(); ++i)
+        max_length = (std::max)(max_length, m_channels[i].length());
+
+    if (max_length == 0)
+        return;
+
+    m_samplesPerPixel = (double)max_length / this->width();
+    m_panx = 0;
+    this->update();
+}
+
+void DigitalTraceGraph::mousePressEvent(QMouseEvent * event)
+{
+    if (event->button() == Qt::LeftButton)
+        m_dragBase = event->pos();
+}
+
+void DigitalTraceGraph::mouseMoveEvent(QMouseEvent * event)
+{
+    if (event->buttons().testFlag(Qt::LeftButton))
+    {
+        QPoint delta = event->pos() - m_dragBase;
+        m_panx -= delta.x() * m_samplesPerPixel;
+        m_dragBase = event->pos();
+        this->update();
+    }
+}
+
+void DigitalTraceGraph::wheelEvent(QWheelEvent * event)
+{
+    int delta = event->delta();
+    m_panx += event->x() * m_samplesPerPixel;
+    m_samplesPerPixel *= pow(1.2, -delta/120.0);
+    m_panx -= event->x() * m_samplesPerPixel;
+    this->update();
 }

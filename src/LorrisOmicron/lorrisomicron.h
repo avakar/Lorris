@@ -2,6 +2,7 @@
 #define LORRISOMICRON_H
 
 #include <QWidget>
+#include <QCheckBox>
 #include "../WorkTab/WorkTab.h"
 #include "../ui/connectbutton.h"
 
@@ -28,8 +29,14 @@ private slots:
 
     void updateUi();
 
+    void on_actionExportTraces_triggered();
+    void on_actionImportTraces_triggered();
+
 private:
     Ui::LorrisOmicron *ui;
+
+    static size_t const enableBoxCount = 16;
+    QCheckBox * m_enableBoxes[enableBoxCount];
 
     ConnectButton * m_connectButton;
     ConnectionPointer<ShupitoConnection> m_conn;
@@ -45,6 +52,9 @@ private:
 
     run_state_t m_run_state;
     void setRunState(run_state_t state);
+
+    uint32_t m_period;
+    uint8_t m_log_channels;
 
     uint32_t m_start_index;
     uint32_t m_start_addr;

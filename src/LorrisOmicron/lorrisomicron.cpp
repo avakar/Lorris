@@ -1,20 +1,64 @@
 #include "lorrisomicron.h"
 #include "ui_lorrisomicron.h"
 #include <utility>
+#include <QFileDialog>
 
 LorrisOmicron::LorrisOmicron()
     : ui(new Ui::LorrisOmicron), m_run_state(st_stopped)
 {
     ui->setupUi(this);
 
+    QCheckBox * const enableBoxes[enableBoxCount] = {
+        ui->ch0enableBox,
+        ui->ch1enableBox,
+        ui->ch2enableBox,
+        ui->ch3enableBox,
+        ui->ch4enableBox,
+        ui->ch5enableBox,
+        ui->ch6enableBox,
+        ui->ch7enableBox,
+        ui->ch8enableBox,
+        ui->ch9enableBox,
+        ui->ch10enableBox,
+        ui->ch11enableBox,
+        ui->ch12enableBox,
+        ui->ch13enableBox,
+        ui->ch14enableBox,
+        ui->ch15enableBox,
+    };
+    std::copy(enableBoxes, enableBoxes + enableBoxCount, m_enableBoxes);
+
     m_connectButton = new ConnectButton(ui->connectButton);
     m_connectButton->setConnectionTypes(pct_shupito);
     connect(m_connectButton, SIGNAL(connectionChosen(ConnectionPointer<Connection>)), this, SLOT(setConnection(ConnectionPointer<Connection>)));
 
+    connect(ui->zoomAllButton, SIGNAL(clicked()), ui->graph, SLOT(zoomToAll()));
+
     ui->readoutContainer->setVisible(false);
     connect(ui->startStopButton, SIGNAL(clicked()), this, SLOT(startStoppedClicked()));
 
+    this->addTopAction(ui->actionImportTraces);
+    this->addTopAction(ui->actionExportTraces);
+
     this->updateUi();
+
+#if 1
+    // Push a bit of random data to a single channel for debugging
+    std::vector<DigitalTraceGraph::channel_data> channels;
+    channels.resize(1);
+    DigitalTraceGraph::channel_data & ch = channels[0];
+    ch.data.push_back(false);
+    ch.data.push_back(true);
+    ch.data.push_back(false);
+
+    ch.blocks[0] = DigitalTraceGraph::block_info(0, 1, 300);
+    ch.blocks[300] = DigitalTraceGraph::block_info(1, 1, 40);
+    ch.blocks[340] = DigitalTraceGraph::block_info(2, 1, 200);
+
+    ui->graph->setChannelData(channels);
+#endif
+
+    ui->graph->zoomToAll();
 }
 
 LorrisOmicron::~LorrisOmicron()
@@ -138,8 +182,24 @@ void LorrisOmicron::startStoppedClicked()
         {
             uint16_t rising_mask = 0;
             uint16_t falling_mask = 0;
-            uint32_t period = 100;
-            uint8_t log_channels = 4;
+            uint32_t period = 100000000 / ui->sampleFreqSpin->value();
+            uint8_t log_channels = 0;
+
+            size_t highestEnabled = 0;
+            for (size_t i = enableBoxCount; i != 0; --i)
+            {
+                if (m_enableBoxes[i-1]->isChecked())
+                {
+                    highestEnabled = i-1;
+                    break;
+                }
+            }
+
+            while (highestEnabled)
+            {
+                highestEnabled /= 2;
+                ++log_channels;
+            }
 
             ShupitoPacket p = makeShupitoPacket(2, 9,
                 rising_mask, rising_mask >> 8,
@@ -147,6 +207,9 @@ void LorrisOmicron::startStoppedClicked()
                 period, period >> 8, period >> 16, period >> 24,
                 log_channels);
             m_conn->sendPacket(p);
+
+            m_period = period;
+            m_log_channels = log_channels;
             this->setRunState(st_start_requested);
         }
         break;
@@ -179,6 +242,7 @@ void LorrisOmicron::setRunState(run_state_t state)
 
     ui->startStopButton->setEnabled(state != st_reading_samples);
     ui->readoutContainer->setVisible(state == st_reading_samples);
+    this->updateUi();
 }
 
 void LorrisOmicron::readMem(uint32_t addr, uint16_t len)
@@ -193,6 +257,16 @@ void LorrisOmicron::readMem(uint32_t addr, uint16_t len)
 
 void LorrisOmicron::handle_captured_data()
 {
+    // workaround: sometimes, the first sample gets lost
+    if (m_captured_data.size() > 2 && m_captured_data[2] == 0xff && m_captured_data[3] == 0xff)
+    {
+        uint8_t first_sample[2] = {
+            m_captured_data[0],
+            m_captured_data[1],
+        };
+        m_captured_data.insert(m_captured_data.begin(), first_sample, first_sample + sizeof first_sample);
+    }
+
     uint8_t const * first = m_captured_data.data();
     uint8_t const * last = first + m_captured_data.size();
 
@@ -285,10 +359,44 @@ void LorrisOmicron::handle_captured_data()
         prev_sample = sample;
     }
 
-    ui->graph->setChannelData(channels);
+    std::vector<DigitalTraceGraph::channel_data> filtered_channels;
+    for (size_t i = 0; i < enableBoxCount; ++i)
+    {
+        if (m_enableBoxes[i]->isChecked())
+            filtered_channels.push_back(channels[i]);
+    }
+
+    ui->graph->setChannelData(filtered_channels);
+    ui->graph->zoomToAll();
 }
 
 void LorrisOmicron::updateUi()
 {
-    ui->startStopButton->setEnabled(m_conn && m_conn->state() == st_connected);
+    bool connected = m_conn && m_conn->state() == st_connected;
+    ui->startStopButton->setEnabled(connected);
+    ui->settingsContainer->setEnabled(!connected || m_run_state == st_stopped);
+}
+
+void LorrisOmicron::on_actionExportTraces_triggered()
+{
+    QString fname = QFileDialog::getSaveFileName(this, QObject::tr("Export traces"), QString(), tr("Omicron traces (*.omtr)"));
+    if (!fname.isEmpty())
+    {
+        QFile fout(fname);
+        fout.open(QFile::WriteOnly | QFile::Truncate);
+        fout.write((char const *)m_captured_data.data(), m_captured_data.size());
+    }
+}
+
+void LorrisOmicron::on_actionImportTraces_triggered()
+{
+    QString fname = QFileDialog::getOpenFileName(this, QObject::tr("Import traces"), QString(), tr("Omicron traces (*.omtr)"));
+    if (!fname.isEmpty())
+    {
+        QFile fin(fname);
+        fin.open(QFile::ReadOnly);
+        QByteArray data = fin.readAll();
+        m_captured_data.assign((uint8_t const *)data.data(), (uint8_t const *)data.data() + data.size());
+        this->handle_captured_data();
+    }
 }
