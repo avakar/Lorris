@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include <map>
+#include <list>
 
 class DigitalTraceGraph : public QWidget
 {
@@ -36,6 +37,7 @@ public:
         bool last_repeat;
     };
 
+    // TODO: rename to trace
     struct channel_data
     {
         std::map<size_t, block_info> blocks;
@@ -48,8 +50,30 @@ public:
         sample_ptr get_sample_ptr(size_t sample) const;
     };
 
+    typedef channel_data trace;
+
+    struct domain_mapping
+    {
+        std::list<trace>::iterator trace_ptr;
+        double samples_per_second;
+        double seconds_from_epoch;
+
+        double start_time() const { return seconds_from_epoch; }
+        double end_time() const { return seconds_from_epoch + trace_ptr->length() / samples_per_second; }
+    };
+
+    struct domain
+    {
+        std::vector<domain_mapping> trace_maps;
+
+        void swap(domain & d)
+        {
+            trace_maps.swap(d.trace_maps);
+        }
+    };
+
     explicit DigitalTraceGraph(QWidget *parent = 0);
-    void setChannelData(std::vector<channel_data> & data);
+    void setChannelData(std::vector<channel_data> & data, double samples_per_second);
 
 public slots:
     void zoomToAll();
@@ -61,10 +85,11 @@ protected:
     void wheelEvent(QWheelEvent * event);
 
 private:
-    std::vector<channel_data> m_channels;
+    std::list<trace> m_traces;
+    domain m_domain;
 
     double m_panx;
-    double m_samplesPerPixel;
+    double m_secondsPerPixel;
 
     QPoint m_dragBase;
 };

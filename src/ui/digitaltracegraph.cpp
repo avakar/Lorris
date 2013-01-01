@@ -90,13 +90,26 @@ DigitalTraceGraph::sample_ptr DigitalTraceGraph::channel_data::get_sample_ptr(si
 }
 
 DigitalTraceGraph::DigitalTraceGraph(QWidget *parent)
-    : QWidget(parent), m_panx(0), m_samplesPerPixel(1.0)
+    : QWidget(parent), m_panx(0), m_secondsPerPixel(1.0)
 {
 }
 
-void DigitalTraceGraph::setChannelData(std::vector<channel_data> & data)
+void DigitalTraceGraph::setChannelData(std::vector<channel_data> & data, double samples_per_second)
 {
-    m_channels.swap(data);
+    std::list<trace> new_traces(data.begin(), data.end());
+    domain d;
+
+    for (std::list<trace>::iterator it = new_traces.begin(); it != new_traces.end(); ++it)
+    {
+        domain_mapping m;
+        m.trace_ptr = it;
+        m.seconds_from_epoch = 0;
+        m.samples_per_second = samples_per_second;
+        d.trace_maps.push_back(m);
+    }
+
+    m_traces.swap(new_traces);
+    m_domain.swap(d);
     this->update();
 }
 
@@ -110,17 +123,22 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
     int row_padding = 2;
 
     int y = 0;
-    for (size_t i = 0; i < m_channels.size(); ++i)
+
+    domain * const selected_domain = &m_domain;
+    for (size_t i = 0; i < selected_domain->trace_maps.size(); ++i)
     {
-        size_t channel_length = m_channels[i].length();
+        domain_mapping & m = selected_domain->trace_maps[i];
+        trace & t = *m.trace_ptr;
+
+        size_t channel_length = t.length();
         int w = this->width();
-        if (m_samplesPerPixel >= 1)
+        if (m_secondsPerPixel*m.samples_per_second >= 1)
         {
             bool have_last_sample_pos = false;
             double last_sample_pos = 0;
             for (int x = 0; x < w; ++x)
             {
-                double sample_pos = x*m_samplesPerPixel+m_panx;
+                double sample_pos = (x*m_secondsPerPixel+m_panx)*m.samples_per_second;
                 if (sample_pos < 0)
                     continue;
                 if (sample_pos >= channel_length)
@@ -128,7 +146,7 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
 
                 if (have_last_sample_pos)
                 {
-                    std::pair<bool, bool> ft = m_channels[i].multisample(last_sample_pos, sample_pos);
+                    std::pair<bool, bool> ft = t.multisample(last_sample_pos, sample_pos);
                     if (ft.first && ft.second)
                         p.drawLine(x, y + row_padding, x, y + row_height - row_padding);
                     else if (ft.first)
@@ -146,11 +164,11 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
             QPoint last_point;
             for (int x = 0; x < w; ++x)
             {
-                double sample_pos = x*m_samplesPerPixel+m_panx;
+                double sample_pos = (x*m_secondsPerPixel+m_panx)*m.samples_per_second;
                 if (sample_pos < 0 || sample_pos >= channel_length)
                     continue;
 
-                bool sample = m_channels[i].sample((size_t)sample_pos);
+                bool sample = t.sample((size_t)sample_pos);
 
                 int yy = y + (sample? row_padding: row_height - row_padding);
                 QPoint pt(x, yy);
@@ -163,19 +181,37 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
 
         y += row_height;
     }
+
 }
 
 void DigitalTraceGraph::zoomToAll()
 {
-    size_t max_length = 0;
-    for (size_t i = 0; i < m_channels.size(); ++i)
-        max_length = (std::max)(max_length, m_channels[i].length());
+    double min_time, max_time;
 
-    if (max_length == 0)
+    domain * const selected_domain = &m_domain;
+    if (selected_domain->trace_maps.empty())
         return;
 
-    m_samplesPerPixel = (double)max_length / this->width();
-    m_panx = 0;
+    for (size_t i = 0; i < selected_domain->trace_maps.size(); ++i)
+    {
+        domain_mapping const & m = selected_domain->trace_maps[i];
+        double start_time = m.start_time();
+        double end_time = m.end_time();
+
+        if (i == 0)
+        {
+            min_time = start_time;
+            max_time = end_time;
+        }
+        else
+        {
+            min_time = (std::min)(min_time, start_time);
+            max_time = (std::max)(max_time, start_time);
+        }
+    }
+
+    m_secondsPerPixel = (max_time - min_time) / this->width();
+    m_panx = min_time;
     this->update();
 }
 
@@ -190,7 +226,7 @@ void DigitalTraceGraph::mouseMoveEvent(QMouseEvent * event)
     if (event->buttons().testFlag(Qt::LeftButton))
     {
         QPoint delta = event->pos() - m_dragBase;
-        m_panx -= delta.x() * m_samplesPerPixel;
+        m_panx -= delta.x() * m_secondsPerPixel;
         m_dragBase = event->pos();
         this->update();
     }
@@ -199,8 +235,8 @@ void DigitalTraceGraph::mouseMoveEvent(QMouseEvent * event)
 void DigitalTraceGraph::wheelEvent(QWheelEvent * event)
 {
     int delta = event->delta();
-    m_panx += event->x() * m_samplesPerPixel;
-    m_samplesPerPixel *= pow(1.2, -delta/120.0);
-    m_panx -= event->x() * m_samplesPerPixel;
+    m_panx += event->x() * m_secondsPerPixel;
+    m_secondsPerPixel *= pow(1.2, -delta/120.0);
+    m_panx -= event->x() * m_secondsPerPixel;
     this->update();
 }

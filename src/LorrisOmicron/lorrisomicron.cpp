@@ -55,7 +55,6 @@ QString LorrisOmicron::GetIdString()
 {
     return "LorrisOmicron";
 }
-
 void LorrisOmicron::setConnection(ConnectionPointer<Connection> const & conn)
 {
     if (m_conn)
@@ -100,7 +99,7 @@ void LorrisOmicron::readNextChunk()
     if (m_start_addr == m_stop_addr)
     {
         this->setRunState(st_stopped);
-        this->handle_captured_data();
+        this->handle_captured_data(100000000 / m_period);
         return;
     }
 
@@ -240,7 +239,7 @@ void LorrisOmicron::readMem(uint32_t addr, uint16_t len)
     m_conn->sendPacket(p);
 }
 
-void LorrisOmicron::handle_captured_data()
+void LorrisOmicron::handle_captured_data(double samples_per_second)
 {
     // workaround: sometimes, the first sample gets lost
     if (m_captured_data.size() > 2 && m_captured_data[2] == 0xff && m_captured_data[3] == 0xff)
@@ -351,7 +350,7 @@ void LorrisOmicron::handle_captured_data()
             filtered_channels.push_back(channels[i]);
     }
 
-    ui->graph->setChannelData(filtered_channels);
+    ui->graph->setChannelData(filtered_channels, samples_per_second);
     ui->graph->zoomToAll();
 }
 
@@ -389,7 +388,7 @@ void LorrisOmicron::importTraces(QString const & fname)
     fin.open(QFile::ReadOnly);
     QByteArray data = fin.readAll();
     m_captured_data.assign((uint8_t const *)data.data(), (uint8_t const *)data.data() + data.size());
-    this->handle_captured_data();
+    this->handle_captured_data(1000000.0); // XXX
 }
 
 void LorrisOmicron::exportTraces(QString const & fname)

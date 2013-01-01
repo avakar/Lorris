@@ -66,7 +66,7 @@ private:
     void readMem(uint32_t addr, uint16_t len);
 
     std::vector<uint8_t> m_captured_data;
-    void handle_captured_data();
+    void handle_captured_data(double samples_per_second);
 
     void importTraces(QString const & fname);
     void exportTraces(QString const & fname);
