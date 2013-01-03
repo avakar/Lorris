@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include "../WorkTab/WorkTab.h"
 #include "../ui/connectbutton.h"
+#include <stdint.h>
 
 namespace Ui {
 class LorrisOmicron;
@@ -31,6 +32,8 @@ private slots:
 
     void on_actionExportTraces_triggered();
     void on_actionImportTraces_triggered();
+
+    void interpolationGroupTriggered(QAction * action);
 
 private:
     Ui::LorrisOmicron *ui;

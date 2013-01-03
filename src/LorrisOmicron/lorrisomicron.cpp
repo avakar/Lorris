@@ -37,12 +37,33 @@ LorrisOmicron::LorrisOmicron()
     ui->readoutContainer->setVisible(false);
     connect(ui->startStopButton, SIGNAL(clicked()), this, SLOT(startStoppedClicked()));
 
+    QActionGroup * interpolationGroup = new QActionGroup(this);
+    interpolationGroup->addAction(ui->actionInterpolationPoint);
+    interpolationGroup->addAction(ui->actionInterpolationLinear);
+    switch (sConfig.get(CFG_QUINT32_OMICRON_INTERPOLATION))
+    {
+    case 0:
+        ui->actionInterpolationPoint->setChecked(true);
+        this->interpolationGroupTriggered(ui->actionInterpolationPoint);
+        break;
+    case 1:
+        ui->actionInterpolationLinear->setChecked(true);
+        this->interpolationGroupTriggered(ui->actionInterpolationLinear);
+        break;
+    }
+    connect(interpolationGroup, SIGNAL(triggered(QAction*)), this, SLOT(interpolationGroupTriggered(QAction*)));
+
+    QMenu * interpolationMenu = new QMenu(tr("Interpolation"), this);
+    interpolationMenu->addAction(ui->actionInterpolationPoint);
+    interpolationMenu->addAction(ui->actionInterpolationLinear);
+    this->addTopMenu(interpolationMenu);
+
     this->addTopAction(ui->actionImportTraces);
     this->addTopAction(ui->actionExportTraces);
 
     this->updateUi();
 
-    this->importTraces("../../etc/samples/pdi_init.omtr");
+    this->importTraces("../etc/samples/pdi_init.omtr");
     ui->graph->zoomToAll();
 }
 
@@ -257,10 +278,10 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
     if ((last - first) % 2 != 0)
         return;
 
-    std::vector<DigitalTraceGraph::channel_data> channels;
+    std::vector<DigitalTraceGraph::trace_t> channels;
     channels.resize(16);
 
-    DigitalTraceGraph::block_info bi = {};
+    DigitalTraceGraph::block_info bi;
     bi.repeat_count = 1;
 
     enum { st_prefirst, st_idle, st_count } state = st_prefirst;
@@ -343,14 +364,18 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
         prev_sample = sample;
     }
 
-    std::vector<DigitalTraceGraph::channel_data> filtered_channels;
+    std::vector<DigitalTraceGraph::trace_t> filtered_channels;
     for (size_t i = 0; i < enableBoxCount; ++i)
     {
         if (m_enableBoxes[i]->isChecked())
+        {
+            channels[i].samples_per_second = samples_per_second;
+            channels[i].seconds_from_epoch = 0;
             filtered_channels.push_back(channels[i]);
+        }
     }
 
-    ui->graph->setChannelData(filtered_channels, samples_per_second);
+    ui->graph->setChannelData(filtered_channels);
     ui->graph->zoomToAll();
 }
 
@@ -396,4 +421,18 @@ void LorrisOmicron::exportTraces(QString const & fname)
     QFile fout(fname);
     fout.open(QFile::WriteOnly | QFile::Truncate);
     fout.write((char const *)m_captured_data.data(), m_captured_data.size());
+}
+
+void LorrisOmicron::interpolationGroupTriggered(QAction * action)
+{
+    if (action == ui->actionInterpolationPoint)
+    {
+        ui->graph->setInterpolation(DigitalTraceGraph::i_point);
+        sConfig.set(CFG_QUINT32_OMICRON_INTERPOLATION, 0);
+    }
+    else
+    {
+        ui->graph->setInterpolation(DigitalTraceGraph::i_linear);
+        sConfig.set(CFG_QUINT32_OMICRON_INTERPOLATION, 1);
+    }
 }

@@ -35,6 +35,7 @@ static const QString keys_quint32[] =
     "analyzer/script_edit_type", // CFG_QUINT32_SCRIPTEDITOR_TYPE
     "analyzer/script_engine",    // CFG_QUINT32_ANALYZER_SCRIPT_ENG
     "general/compress_block",    // CFG_QUINT32_COMPRESS_BLOCK
+    "omicron/interpolation",     // CFG_QUINT32_OMICRON_INTERPOLATION
 };
 
 static const quint32 def_quint32[] =
@@ -58,6 +59,7 @@ static const quint32 def_quint32[] =
     UINT_MAX,                    // CFG_QUINT32_SCRIPTEDITOR_TYPE
     0,                           // CFG_QUINT32_ANALYZER_SCRIPT_ENG
     10*1024*1024,                // CFG_QUINT32_COMPRESS_BLOCK
+    0,                           // CFG_QUINT32_OMICRON_INTERPOLATION
 };
 
 static const QString keys_string[] =

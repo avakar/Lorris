@@ -411,6 +411,22 @@
     <string>Import traces...</string>
    </property>
   </action>
+  <action name="actionInterpolationPoint">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Nearest point</string>
+   </property>
+  </action>
+  <action name="actionInterpolationLinear">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Linear</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
