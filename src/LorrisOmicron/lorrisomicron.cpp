@@ -29,7 +29,7 @@ LorrisOmicron::LorrisOmicron()
     std::copy(enableBoxes, enableBoxes + enableBoxCount, m_enableBoxes);
 
     m_connectButton = new ConnectButton(ui->connectButton);
-    m_connectButton->setConnectionTypes(pct_shupito);
+    m_connectButton->setConnectionTypes(pct_port_programmable);
     connect(m_connectButton, SIGNAL(connectionChosen(ConnectionPointer<Connection>)), this, SLOT(setConnection(ConnectionPointer<Connection>)));
 
     connect(ui->zoomAllButton, SIGNAL(clicked()), ui->graph, SLOT(zoomToAll()));
