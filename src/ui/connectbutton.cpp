@@ -9,7 +9,7 @@
 #include "chooseconnectiondlg.h"
 
 ConnectButton::ConnectButton(QToolButton * btn)
-    : QObject(btn), m_btn(btn), m_conn(0), m_connTypes(pct_port)
+    : QObject(btn), m_btn(btn), m_conn(0), m_connTypes(pct_port_data)
 {
     m_connectAction = m_menu.addAction(tr("Connect"));
     m_menu.setDefaultAction(m_connectAction);
@@ -25,7 +25,7 @@ ConnectButton::ConnectButton(QToolButton * btn)
 
 void ConnectButton::connectTriggered()
 {
-    if (!m_conn || m_conn->state() == st_removed)
+    if (!m_conn || m_conn->isMissing())
     {
         this->choose();
         if (m_conn && !m_conn->isOpen())
@@ -84,7 +84,8 @@ void ConnectButton::connectionStateChanged(ConnectionState state)
     switch (state)
     {
     case st_disconnected:
-    case st_removed:
+    case st_missing:
+    case st_connect_pending:
         m_connectAction->setText(tr("Connect"));
         m_connectAction->setEnabled(true);
         break;

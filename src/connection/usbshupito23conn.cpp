@@ -1,32 +1,14 @@
 #include "usbshupito23conn.h"
+#include "../misc/utils.h"
 #include <stdexcept>
 #include <QEvent>
 #include <QCoreApplication>
 
-// XXX: st_removed
-
-namespace {
-
-class RecvEvent
-    : public QEvent
-{
-public:
-    static const QEvent::Type recvType = static_cast<QEvent::Type>(2000);
-
-    RecvEvent(yb::buffer_ref const & buf)
-        : QEvent(recvType), m_packet(buf.begin(), buf.end())
-    {
-    }
-
-    ShupitoPacket m_packet;
-};
-
-}
-
 UsbShupito23Connection::UsbShupito23Connection(yb::async_runner & runner)
     : ShupitoConnection(CONNECTION_SHUPITO23), m_runner(runner)
 {
-    this->SetState(st_removed);
+    connect(&m_incomingPackets, SIGNAL(dataReceived()), this, SLOT(incomingPacketsReceived()));
+    this->markMissing();
 }
 
 static QString fromUtf8(std::string const & s)
@@ -79,21 +61,34 @@ void UsbShupito23Connection::setup(yb::usb_device_interface const & intf)
     m_desc.Clear();
     m_desc.AddData(raw_desc);
 
-    this->SetState(st_disconnected);
+    this->markPresent();
 }
 
 void UsbShupito23Connection::clear()
 {
-    m_intf_guard.release();
+    this->closeImpl();
     m_intf.clear();
-    this->SetState(st_removed);
+    this->markMissing();
 }
 
-void UsbShupito23Connection::OpenConcurrent()
+void UsbShupito23Connection::closeImpl()
+{
+    if (this->state() == st_connected)
+    {
+        m_write_loop.wait(yb::cl_abort);
+        for (size_t i = 0; i < m_in_eps.size(); ++i)
+            m_read_loops[i].read_loop.wait(yb::cl_abort);
+        m_read_loops.reset();
+    }
+
+    m_intf_guard.release();
+}
+
+void UsbShupito23Connection::doOpen()
 {
     yb::usb_device dev = m_intf.device();
     if (!m_intf_guard.claim(dev, m_intf.interface_index()))
-        throw std::runtime_error("Cannot claim the interface");
+        return Utils::showErrorBox("Cannot claim the interface");
 
     m_write_loop = m_runner.post(yb::loop([this](yb::cancel_level cl) -> yb::task<void> {
         return cl < yb::cl_quit? this->write_loop(): yb::nulltask;
@@ -110,17 +105,9 @@ void UsbShupito23Connection::OpenConcurrent()
     this->SetState(st_connected);
 }
 
-void UsbShupito23Connection::Close()
+void UsbShupito23Connection::doClose()
 {
-    if (this->state() == st_connected)
-    {
-        m_write_loop.wait(yb::cl_abort);
-        for (size_t i = 0; i < m_in_eps.size(); ++i)
-            m_read_loops[i].read_loop.wait(yb::cl_abort);
-        m_read_loops.reset();
-    }
-
-    m_intf_guard.release();
+    this->closeImpl();
     this->SetState(st_disconnected);
 }
 
@@ -159,21 +146,16 @@ yb::task<void> UsbShupito23Connection::write_packets()
 yb::task<void> UsbShupito23Connection::read_loop(uint8_t i)
 {
     return m_intf.device().bulk_read(m_in_eps[i], m_read_loops[i].read_buffer, sizeof m_read_loops[i].read_buffer).then([this, i](size_t r) -> yb::task<void> {
-        RecvEvent * ev = new RecvEvent(yb::buffer_ref(m_read_loops[i].read_buffer, r));
-        QCoreApplication::instance()->postEvent(this, ev);
+        if (r != 0)
+			m_incomingPackets.send(ShupitoPacket(m_read_loops[i].read_buffer, m_read_loops[i].read_buffer + r));
         return yb::async::value();
     });
 }
 
-bool UsbShupito23Connection::event(QEvent * ev)
+void UsbShupito23Connection::incomingPacketsReceived()
 {
-    if (ev->type() == RecvEvent::recvType)
-    {
-        emit this->packetRead(static_cast<RecvEvent *>(ev)->m_packet);
-        return true;
-    }
-    else
-    {
-        return this->ShupitoConnection::event(ev);
-    }
+    std::vector<ShupitoPacket> packets;
+    m_incomingPackets.receive(packets);
+    for (size_t i = 0; i < packets.size(); ++i)
+        emit this->packetRead(packets[i]);
 }

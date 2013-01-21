@@ -31,6 +31,7 @@
 #include "../WorkTab/WorkTabMgr.h"
 #include "../connection/connectionmgr2.h"
 #include "programmers/shupitoprogrammer.h"
+#include "programmers/avr232bootprogrammer.h"
 
 #ifdef HAVE_LIBYB
 #include "programmers/flipprogrammer.h"
@@ -60,6 +61,7 @@ LorrisShupito::LorrisShupito()
     lastVccIndex = 0;
     m_progress_dialog = NULL;
     m_state = 0;
+    m_buttons_enabled = false;
 
     m_mode_act_signalmap = new QSignalMapper(this);
     connect(m_mode_act_signalmap, SIGNAL(mapped(int)), SLOT(modeSelected(int)));
@@ -660,9 +662,6 @@ void LorrisShupito::saveToFile(int memId)
 {
     try
     {
-        if(m_cur_def.getName().isEmpty())
-            restartChip();
-
         QString filename = QFileDialog::getSaveFileName(this, QObject::tr("Export data"),
                                                         sConfig.get(CFG_STRING_SHUPITO_HEX_FOLDER),
                                                         filters);
@@ -743,6 +742,19 @@ void LorrisShupito::updateProgrammer()
             m_programmer.reset(new FlipProgrammer(fc, &m_logsink));
     }
 #endif
+    else if(ConnectionPointer<PortConnection> con = m_con.dynamicCast<PortConnection>())
+    {
+        switch(con->programmerType())
+        {
+            case programmer_shupito:
+                break; // morphed to ShupitoConnection in ChooseConnectionDlg::choose
+            case programmer_avr232boot:
+                m_programmer.reset(new avr232bootProgrammer(con, &m_logsink));
+                break;
+            default:
+                break;
+        }
+    }
 
     if (!m_programmer)
         return;
@@ -764,7 +776,11 @@ void LorrisShupito::updateProgrammer()
 void LorrisShupito::setConnection(ConnectionPointer<Connection> const & con)
 {
     if (m_con)
+    {
+        m_con->disconnect(this);
+        this->disconnect(m_con.data());
         m_con->releaseTab();
+    }
 
     m_con = con;
     m_programmer.reset();
@@ -825,6 +841,7 @@ void LorrisShupito::timeout()
     {
         m_timeout_warn = new ToolTipWarn(tr("Shupito is not responding, try to re-plug it into computer!"),
                                          m_connectButton->btn(), this, -1);
+        Utils::playErrorSound();
     }
 }
 
@@ -843,11 +860,17 @@ void LorrisShupito::saveData(DataFileParser *file)
 
     ui->saveData(file);
 
-    ConnectionPointer<PortShupitoConnection> sc = m_con.dynamicCast<PortShupitoConnection>();
-    if(sc)
+    if(ConnectionPointer<PortShupitoConnection> sc = m_con.dynamicCast<PortShupitoConnection>())
     {
-        file->writeBlockIdentifier("LorrShupitoConn");
+        file->writeBlockIdentifier("LorrShupitoConn2");
+        file->writeString("Shupito");
         file->writeConn(sc->port().data());
+    }
+    else if(ConnectionPointer<PortConnection> con = m_con.dynamicCast<PortConnection>())
+    {
+        file->writeBlockIdentifier("LorrShupitoConn2");
+        file->writeString("Port");
+        file->writeConn(con.data());
     }
 }
 
@@ -870,21 +893,33 @@ void LorrisShupito::loadData(DataFileParser *file)
 
     ui->loadData(file);
 
-    if(file->seekToNextBlock("LorrShupitoConn", BLOCK_WORKTAB))
+    if(file->seekToNextBlock("LorrShupitoConn2", BLOCK_WORKTAB))
     {
         quint8 type = 0;
         QHash<QString, QVariant> cfg;
+
+        QString typeStr = file->readString();
 
         if(file->readConn(type, cfg))
         {
             ConnectionPointer<PortConnection> pc = sConMgr2.getConnWithConfig(type, cfg);
             if(pc)
             {
-                ConnectionPointer<ShupitoConnection> sc = sConMgr2.createAutoShupito(pc.data());
-                m_connectButton->setConn(sc);
+                ConnectionPointer<Connection> con;
+                if(typeStr == "Shupito")
+                {
+                    ConnectionPointer<ShupitoConnection> sc = sConMgr2.createAutoShupito(pc.data());
+                    con = sc;
+                }
+                else if(typeStr == "Port")
+                    con = pc;
 
-                if(!sc->isOpen() && sConfig.get(CFG_BOOL_SESSION_CONNECT))
-                    sc->OpenConcurrent();
+                if(con.data())
+                {
+                    m_connectButton->setConn(con);
+                    if(!con->isOpen() && sConfig.get(CFG_BOOL_SESSION_CONNECT))
+                        con->OpenConcurrent();
+                }
             }
         }
     }
@@ -914,6 +949,10 @@ void LorrisShupito::setUiType(int type)
     if(ui && ui->getType() == type)
         return;
 
+    QByteArray hexData[MEM_FUSES];
+    for(quint8 i = MEM_FLASH; ui && i < MEM_FUSES; ++i)
+        hexData[i] = ui->getHexData(i);
+
     delete m_connectButton;
     m_connectButton = NULL;
 
@@ -924,6 +963,18 @@ void LorrisShupito::setUiType(int type)
     ui->vddSetup(m_vdd_setup);
 
     m_miniUi->setChecked(type == UI_MINIMAL);
+
+    if(!m_hexFilenames[MEM_FLASH].isEmpty())
+        ui->setFileAndTime(m_hexFilenames[MEM_FLASH], QFileInfo(m_hexFilenames[MEM_FLASH]).lastModified());
+
+    for(quint8 i = MEM_FLASH; i < MEM_FUSES; ++i)
+    {
+        if(!hexData[i].isEmpty())
+        {
+            ui->setHexColor(i, colorFromFile);
+            ui->setHexData(i, hexData[i]);
+        }
+    }
 }
 
 void LorrisShupito::setMiniUi(bool mini)
@@ -931,10 +982,6 @@ void LorrisShupito::setMiniUi(bool mini)
     int type = mini ? UI_MINIMAL : UI_FULL;
     if(ui->getType() == type)
         return;
-
-    QByteArray hexData[MEM_FUSES];
-    for(quint8 i = MEM_FLASH; i < MEM_FUSES; ++i)
-        hexData[i] = ui->getHexData(i);
 
     QByteArray data;
     DataFileParser parser(&data, QIODevice::ReadWrite);
@@ -946,21 +993,9 @@ void LorrisShupito::setMiniUi(bool mini)
 
     ui->loadData(&parser);
 
-    for(quint8 i = MEM_FLASH; i < MEM_FUSES; ++i)
-    {
-        if(!hexData[i].isEmpty())
-        {
-            ui->setHexColor(i, colorFromFile);
-            ui->setHexData(i, hexData[i]);
-        }
-    }
-
     ui->connectedStatus(!(m_state & STATE_DISCONNECTED));
 
     emit enableButtons(m_buttons_enabled);
-
-    if(!m_hexFilenames[MEM_FLASH].isEmpty())
-        ui->setFileAndTime(m_hexFilenames[MEM_FLASH], QFileInfo(m_hexFilenames[MEM_FLASH]).lastModified());
 }
 
 void LorrisShupito::buttonPressed(int btnid)

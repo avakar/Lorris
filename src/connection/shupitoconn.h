@@ -38,9 +38,6 @@ class PortShupitoConnection : public ShupitoConnection
 public:
     PortShupitoConnection();
 
-    void OpenConcurrent();
-    void Close();
-
     ConnectionPointer<PortConnection> const & port() const { return m_port; }
     void setPort(ConnectionPointer<PortConnection> const & port);
 
@@ -53,6 +50,8 @@ public slots:
 
 protected:
     ~PortShupitoConnection();
+    void doOpen();
+    void doClose();
 
 private slots:
     void portStateChanged(ConnectionState state);

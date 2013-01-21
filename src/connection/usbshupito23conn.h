@@ -3,6 +3,7 @@
 
 #include "connection.h"
 #include "shupitoconn.h"
+#include "../misc/threadchannel.h"
 #include <libyb/usb/usb_device.hpp>
 #include <libyb/usb/interface_guard.hpp>
 #include <libyb/async/async_channel.hpp>
@@ -21,18 +22,21 @@ public:
     void setup(yb::usb_device_interface const & intf);
     void clear();
 
-    void OpenConcurrent();
-    void Close();
-
     void requestDesc();
 
 public slots:
     void sendPacket(ShupitoPacket const & packet);
 
 protected:
-    bool event(QEvent * e);
+    void doOpen();
+    void doClose();
+
+private slots:
+    void incomingPacketsReceived();
 
 private:
+    void closeImpl();
+
     yb::async_runner & m_runner;
     yb::usb_device_interface m_intf;
     yb::usb_interface_guard m_intf_guard;
@@ -63,6 +67,8 @@ private:
 
     std::unique_ptr<read_loop_ctx[]> m_read_loops;
     yb::task<void> read_loop(uint8_t i);
+
+    ThreadChannel<ShupitoPacket> m_incomingPackets;
 };
 
 #endif // LORRIS_CONNECTION_USBSHUPITO23CONN_H
