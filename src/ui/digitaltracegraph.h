@@ -35,7 +35,8 @@ public:
     struct sample_ptr
     {
         std::map<size_t, block_info>::const_iterator block_it;
-        size_t block_offset;
+        size_t data_offset;
+        size_t block_sample_offset;
         size_t repeat_index;
         size_t repeat_offset;
 

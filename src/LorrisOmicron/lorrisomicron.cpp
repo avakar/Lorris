@@ -117,10 +117,10 @@ static T deserialize(uint8_t const * first)
 
 void LorrisOmicron::readNextChunk()
 {
-    if (m_start_addr == m_stop_addr)
+    if (m_readCanceled || m_start_addr == m_stop_addr)
     {
         this->setRunState(st_stopped);
-        this->handle_captured_data(100000000 / m_period);
+        this->handle_captured_data(100000000 / m_period, m_log_channels);
         return;
     }
 
@@ -135,7 +135,7 @@ void LorrisOmicron::packetRead(ShupitoPacket const & p)
     if (p[0] == 1)
     {
         m_captured_data.insert(m_captured_data.end(), p.begin() + 1, p.end());
-        ui->readoutProgress->setValue(m_start_addr - m_requested_length);
+        ui->readoutProgress->setValue(m_start_addr - m_requested_length/2);
         if (m_requested_length < p.size() - 1)
         {
             m_requested_length = 0;
@@ -159,6 +159,7 @@ void LorrisOmicron::packetRead(ShupitoPacket const & p)
         m_stop_index = sample_index;
         m_stop_addr = stop_addr;
 
+        m_readCanceled = false;
         ui->readoutProgress->setRange(m_start_addr, m_stop_addr);
         ui->readoutProgress->setValue(m_start_addr);
         this->setRunState(st_reading_samples);
@@ -190,6 +191,9 @@ void LorrisOmicron::startStoppedClicked()
             uint32_t period = 100000000 / ui->sampleFreqSpin->value();
             uint8_t log_channels = 0;
 
+            //rising_mask = (1<<0);
+            //period = 0xffffffff;
+
             size_t highestEnabled = 0;
             for (size_t i = enableBoxCount; i != 0; --i)
             {
@@ -218,6 +222,11 @@ void LorrisOmicron::startStoppedClicked()
             this->setRunState(st_start_requested);
         }
         break;
+
+    case st_reading_samples:
+        m_readCanceled = true;
+        break;
+
     default:
         m_conn->sendPacket(makeShupitoPacket(3, 0));
         this->setRunState(st_stop_requested);
@@ -260,7 +269,7 @@ void LorrisOmicron::readMem(uint32_t addr, uint16_t len)
     m_conn->sendPacket(p);
 }
 
-void LorrisOmicron::handle_captured_data(double samples_per_second)
+void LorrisOmicron::handle_captured_data(double samples_per_second, int log_channels)
 {
     // workaround: sometimes, the first sample gets lost
     if (m_captured_data.size() > 2 && m_captured_data[2] == 0xff && m_captured_data[3] == 0xff)
@@ -278,8 +287,15 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
     if ((last - first) % 2 != 0)
         return;
 
+    size_t channel_count = 1;
+    while (log_channels)
+    {
+        channel_count *= 2;
+        --log_channels;
+    }
+
     std::vector<DigitalTraceGraph::trace_t> channels;
-    channels.resize(16);
+    channels.resize(channel_count);
 
     DigitalTraceGraph::block_info bi;
     bi.repeat_count = 1;
@@ -287,25 +303,11 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
     enum { st_prefirst, st_idle, st_count } state = st_prefirst;
     size_t sample_index = 0;
     uint16_t prev_sample = 0;
-    bool done = false;
-    for (uint8_t const * cur = first; !done;)
+    for (uint8_t const * cur = first; cur != last;)
     {
         uint16_t sample;
-
-        if (cur != last)
-        {
-            sample = (*cur++) << 8;
-            sample |= *cur++;
-        }
-        else if (state == st_count)
-        {
-            break;
-        }
-        else
-        {
-            done = true;
-            sample = prev_sample + 1;
-        }
+        sample = (*cur++) << 8;
+        sample |= *cur++;
 
         switch (state)
         {
@@ -323,36 +325,52 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
                     bi.block_offset += bi.block_length;
                 }
 
-                uint16_t tmp = prev_sample;
-                for (size_t i = 0; i < channels.size(); ++i)
+                uint16_t tmp2 = prev_sample;
+                size_t bits_remaining = 16;
+                while (bits_remaining)
                 {
-                    channels[i].data.push_back((tmp & 1) != 0);
-                    tmp >>= 1;
+                    uint16_t tmp = tmp2 >> (16 - channels.size());
+                    tmp2 <<= channels.size();
+                    bits_remaining -= channels.size();
+
+                    for (size_t i = 0; i < channels.size(); ++i)
+                    {
+                        channels[i].data.push_back((tmp & 1) == 0);
+                        tmp >>= 1;
+                    }
                 }
 
-                bi.block_length = 1;
+                bi.block_length = 16 / channels.size();
                 bi.repeat_count = 2;
                 state = st_count;
             }
             else
             {
-                uint16_t tmp = prev_sample;
-                for (size_t i = 0; i < channels.size(); ++i)
+                uint16_t tmp2 = prev_sample;
+                size_t bits_remaining = 16;
+                while (bits_remaining)
                 {
-                    channels[i].data.push_back((tmp & 1) != 0);
-                    tmp >>= 1;
+                    uint16_t tmp = tmp2 >> (16 - channels.size());
+                    tmp2 <<= channels.size();
+                    bits_remaining -= channels.size();
+
+                    for (size_t i = 0; i < channels.size(); ++i)
+                    {
+                        channels[i].data.push_back((tmp & 1) == 0);
+                        tmp >>= 1;
+                    }
                 }
-                ++bi.block_length;
+
+                bi.block_length += 16 / channels.size();
             }
             break;
         case st_count:
-            Q_ASSERT(bi.block_length == 1);
             bi.repeat_count += sample;
             if (sample != 0xffff)
             {
                 for (size_t i = 0; i < channels.size(); ++i)
                     channels[i].blocks[sample_index] = bi;
-                sample_index += bi.repeat_count;
+                sample_index += bi.repeat_count * bi.block_length;
                 bi.repeat_count = 1;
                 bi.block_offset += bi.block_length;
                 bi.block_length = 0;
@@ -363,6 +381,40 @@ void LorrisOmicron::handle_captured_data(double samples_per_second)
 
         prev_sample = sample;
     }
+
+    switch (state)
+    {
+    case st_prefirst:
+        break;
+    case st_idle:
+        if (bi.block_length != 0)
+        {
+            for (size_t i = 0; i < channels.size(); ++i)
+                channels[i].blocks[sample_index] = bi;
+        }
+        break;
+    case st_count:
+        for (size_t i = 0; i < channels.size(); ++i)
+            channels[i].blocks[sample_index] = bi;
+        break;
+    }
+
+#ifndef NDEBUG
+    for (size_t i = 0; i < channels.size(); ++i)
+    {
+        size_t sample_index = 0;
+        size_t sample_offset = 0;
+        for (auto ci = channels[i].blocks.begin(); ci != channels[i].blocks.end(); ++ci)
+        {
+            Q_ASSERT(ci->first == sample_index);
+            Q_ASSERT(ci->second.block_offset == sample_offset);
+            sample_index += ci->second.block_length * ci->second.repeat_count;
+            sample_offset += ci->second.block_length;
+        }
+
+        Q_ASSERT(sample_offset <= channels[i].data.size());
+    }
+#endif
 
     std::vector<DigitalTraceGraph::trace_t> filtered_channels;
     for (size_t i = 0; i < enableBoxCount; ++i)
@@ -413,7 +465,25 @@ void LorrisOmicron::importTraces(QString const & fname)
     fin.open(QFile::ReadOnly);
     QByteArray data = fin.readAll();
     m_captured_data.assign((uint8_t const *)data.data(), (uint8_t const *)data.data() + data.size());
-    this->handle_captured_data(1000000.0); // XXX
+
+    size_t highestEnabled = 0;
+    for (size_t i = enableBoxCount; i != 0; --i)
+    {
+        if (m_enableBoxes[i-1]->isChecked())
+        {
+            highestEnabled = i-1;
+            break;
+        }
+    }
+
+    size_t log_channels = 0;
+    while (highestEnabled)
+    {
+        highestEnabled /= 2;
+        ++log_channels;
+    }
+
+    this->handle_captured_data(ui->sampleFreqSpin->value(), log_channels); // XXX
 }
 
 void LorrisOmicron::exportTraces(QString const & fname)

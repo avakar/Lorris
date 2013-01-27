@@ -64,12 +64,13 @@ private:
     uint32_t m_stop_index;
     uint32_t m_stop_addr;
     uint16_t m_requested_length;
+    bool m_readCanceled;
     void readNextChunk();
 
     void readMem(uint32_t addr, uint16_t len);
 
     std::vector<uint8_t> m_captured_data;
-    void handle_captured_data(double samples_per_second);
+    void handle_captured_data(double samples_per_second, int log_channels);
 
     void importTraces(QString const & fname);
     void exportTraces(QString const & fname);
