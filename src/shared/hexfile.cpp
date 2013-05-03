@@ -49,6 +49,17 @@ HexFile::HexFile()
 {
 }
 
+void HexFile::LoadFromBin(const QString &path)
+{
+    QFile file(path);
+    if(!file.open(QIODevice::ReadOnly))
+        throw QString(QObject::tr("Can't open file \"%1\"!")).arg(path);
+
+    QByteArray data = file.readAll();
+    m_data.clear();
+    m_data[0].assign(data.data(), data.data() + data.size());
+}
+
 void HexFile::LoadFromFile(const QString &path)
 {
     QFile file(path);
@@ -277,7 +288,8 @@ void HexFile::makePages(std::vector<page> &pages, quint8 memId, chip_definition 
     if(!memdef)
         throw QString(QObject::tr("This chip does not have memory type %1")).arg(memId);
 
-    if(getTopAddress() > memdef->size)
+    size_t memsize = memdef->size? memdef->size: getTopAddress();
+    if(getTopAddress() > memsize)
         throw QString(QObject::tr("Program is too large."));
 
     if(memdef->pagesize == 0)
@@ -302,9 +314,9 @@ void HexFile::makePages(std::vector<page> &pages, quint8 memId, chip_definition 
         quint32 alt_entry_page = patch_pos / memdef->pagesize;
         bool add_alt_page = patch_pos != 0;
 
-        Patcher patcher(patch_pos, memdef->size);
+        Patcher patcher(patch_pos, memsize);
 
-        for(quint32 i = 0; i < memdef->size / memdef->pagesize; ++i)
+        for(quint32 i = 0; i < (memsize + memdef->pagesize - 1) / memdef->pagesize; ++i)
         {
             cur_page.address = i * memdef->pagesize;
             if(!intersects(cur_page.address, memdef->pagesize))

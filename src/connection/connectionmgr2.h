@@ -161,6 +161,10 @@ private:
     StandbyDeviceList<UsbAcmConnection2, usb_interface_standby> m_standby_usb_acm_devices;
     std::map<usb_interface_standby, yb::usb_device_interface> m_usb_acm_devices_by_info;
     std::set<UsbAcmConnection2 *> m_user_owned_acm_conns;
+
+    QList<QVariant> m_connConfigs;
+    void updateConfig(UsbAcmConnection2 * conn);
+    void applyConfig(UsbAcmConnection2 * conn);
 };
 
 #endif // HAVE_LIBYB
@@ -193,9 +197,16 @@ public:
 
     ConnectionPointer<PortConnection> getConnWithConfig(quint8 type, const QHash<QString, QVariant>& cfg);
 
+    qint64 generateCompanionId();
+    Connection *getCompanionConnection(Connection *toConn);
+
 Q_SIGNALS:
     void connAdded(Connection * conn);
     void connRemoved(Connection * conn);
+
+public slots:
+    void connectAll();
+    void disconnectAll();
 
 private slots:
     void connectionDestroyed();
@@ -214,6 +225,7 @@ private:
 #endif // HAVE_LIBYB
     QHash<PortConnection *, ShupitoConnection *> m_autoShupitos;
     QHash<QObject *, PortConnection *> m_autoShupitosRev;
+    qint64 m_lastCompanionId;
 };
 
 extern ConnectionManager2 * psConMgr2;

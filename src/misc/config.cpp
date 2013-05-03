@@ -81,6 +81,7 @@ static const QString keys_string[] =
     "general/font",               // CFG_STRING_APP_FONT
     "analyzer/script_wnd_params", // CFG_STRING_SCRIPT_WND_PARAMS
     "proxy/tunnel_name",          // CFG_STRING_PROXY_TUNNEL_NAME
+    "shupito/avr109_bootseq",     // CFG_STRING_AVR109_BOOTSEQ
 };
 
 static const QString def_string[] =
@@ -102,6 +103,7 @@ static const QString def_string[] =
     "",                           // CFG_STRING_APP_FONT
     "",                           // CFG_STRING_SCRIPT_WND_PARAMS
     "Proxy tunnel",               // CFG_STRING_PROXY_TUNNEL_NAME
+    "0x74 0x7E 0x7A 0x33",        // CFG_STRING_AVR109_BOOTSEQ
 };
 
 static const QString keys_bool[] =
@@ -117,7 +119,6 @@ static const QString keys_bool[] =
     "analyzer/show_grid",         // CFG_BOOL_ANALYZER_SHOW_GRID,
     "shupito/show_settings",      // CFG_BOOL_SHUPITO_SHOW_SETTINGS
     "shupito/show_flash_warn",    // CFG_BOOL_SHUPITO_SHOW_FLASH_WARN
-    "general/auto_update",        // CFG_BOOL_AUTO_UPDATE
     "general/check_for_updates",  // CFG_BOOL_CHECK_FOR_UPDATE
     "general/load_last_session",  // CFG_BOOL_LOAD_LAST_SESSION
     "general/session_connect",    // CFG_BOOL_SESSION_CONNECT
@@ -130,6 +131,8 @@ static const QString keys_bool[] =
     "analyzer/placement_lines",   // CFG_BOOL_ANALYZER_PLACEMENT_LINES
     "analyzer/show_preview",      // CFG_BOOL_ANALYZER_SHOW_PREVIEW
     "shupito/enable_hw_button",   // CFG_BOOL_SHUPITO_ENABLE_HW_BUTTON
+    "analyzer/show_bookmarks",    // CFG_BOOL_ANALYZER_SHOW_BOOKMARKS
+    "general/connect_on_new_tab", // CFG_BOOL_CONN_ON_NEW_TAB
 };
 
 static const bool def_bool[] =
@@ -145,7 +148,6 @@ static const bool def_bool[] =
     false,                        // CFG_BOOL_ANALYZER_SHOW_GRID,
     true,                         // CFG_BOOL_SHUPITO_SHOW_SETTINGS
     true,                         // CFG_BOOL_SHUPITO_SHOW_FLASH_WARN
-    false,                        // CFG_BOOL_AUTO_UPDATE
     true,                         // CFG_BOOL_CHECK_FOR_UPDATE
     false,                        // CFG_BOOL_LOAD_LAST_SESSION
     true,                         // CFG_BOOL_SESSION_CONNECT
@@ -156,14 +158,22 @@ static const bool def_bool[] =
     false,                        // CFG_BOOL_SCRIPT_SHOW_INPUT
     true,                         // CFG_BOOL_ONE_INSTANCE
     true,                         // CFG_BOOL_ANALYZER_PLACEMENT_LINES
+
+#ifdef Q_OS_WIN // this is painfully slow on Windows
+    false,                        // CFG_BOOL_ANALYZER_SHOW_PREVIEW
+#else
     true,                         // CFG_BOOL_ANALYZER_SHOW_PREVIEW
+#endif
+
     true,                         // CFG_BOOL_SHUPITO_ENABLE_HW_BUTTON
+    true,                         // CFG_BOOL_ANALYZER_SHOW_BOOKMARKS
+    true,                         // CFG_BOOL_CONN_ON_NEW_TAB
 };
 
 static const QString keys_variant[] =
 {
     "general/connections",        // CFG_VARIANT_CONNECTIONS
-    "general/usb_enumerator",     // CFG_VARIANT_USB_ENUMERATOR
+    "general/usb_yb_enumerator",  // CFG_VARIANT_USB_ENUMERATOR
     "kate/kate_sett_doc",         // CFG_VARIANT_KATE_SETTINGS_DOC
     "kate/kate_sett_view",        // CFG_VARIANT_KATE_SETTINGS_VIEW
     "general/serial_connections", // CFG_VARIANT_SERIAL_CONNECTIONS

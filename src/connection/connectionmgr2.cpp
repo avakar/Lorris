@@ -7,11 +7,13 @@
 
 #include <qextserialenumerator.h>
 #include <QStringBuilder>
+#include <QDateTime>
 
 #include "connectionmgr2.h"
 #include "serialport.h"
 #include "tcpsocket.h"
 #include "proxytunnel.h"
+#include "shupitotunnel.h"
 #include "../misc/config.h"
 #include "../misc/utils.h"
 
@@ -56,7 +58,7 @@ void SerialPortEnumerator::refresh()
         if (it == m_portMap.end())
         {
             ConnectionPointer<SerialPort> portGuard(new SerialPort());
-            portGuard->setName(info.portName);
+            portGuard->setName(info.portName, /*isDefault=*/true);
             portGuard->setDeviceName(info.physName);
             portGuard->setFriendlyName(info.friendName);
             portGuard->setBaudRate(38400);
@@ -126,10 +128,57 @@ LibybUsbEnumerator::LibybUsbEnumerator(yb::async_runner & runner)
     m_usb_monitor = m_usb_context.run([this](yb::usb_plugin_event const & p) {
         m_plugin_channel.send(p);
     });
+
+    QVariant cfg = sConfig.get(CFG_VARIANT_USB_ENUMERATOR);
+    if(cfg.type() == QVariant::List)
+        m_connConfigs = cfg.toList();
 }
 
 LibybUsbEnumerator::~LibybUsbEnumerator()
 {
+    for (auto it = m_usb_acm_devices.begin(); it != m_usb_acm_devices.end(); ++it)
+        this->updateConfig(it->second.data());
+    sConfig.set(CFG_VARIANT_USB_ENUMERATOR, m_connConfigs);
+}
+
+void LibybUsbEnumerator::updateConfig(UsbAcmConnection2 * conn)
+{
+    for (int i = 0; i < m_connConfigs.size(); ++i)
+    {
+        QHash<QString, QVariant> settings = m_connConfigs[i].toHash();
+
+        int vid = settings["vid"].toInt();
+        int pid = settings["pid"].toInt();
+        QString sn = settings["serial_number"].toString();
+        QString intf = settings["intf_name"].toString();
+
+        if (conn->vid() == vid && conn->pid() == pid && conn->serialNumber() == sn && conn->intfName() == intf)
+        {
+            m_connConfigs[i] = conn->config();
+            return;
+        }
+    }
+
+    m_connConfigs.push_back(conn->config());
+}
+
+void LibybUsbEnumerator::applyConfig(UsbAcmConnection2 * conn)
+{
+    for (int i = 0; i < m_connConfigs.size(); ++i)
+    {
+        QHash<QString, QVariant> settings = m_connConfigs[i].toHash();
+
+        int vid = settings["vid"].toInt();
+        int pid = settings["pid"].toInt();
+        QString sn = settings["serial_number"].toString();
+        QString intf = settings["intf_name"].toString();
+
+        if (conn->vid() == vid && conn->pid() == pid && conn->serialNumber() == sn && conn->intfName() == intf)
+        {
+            conn->applyConfig(settings);
+            break;
+        }
+    }
 }
 
 void LibybUsbEnumerator::registerUserOwnedConn(UsbAcmConnection2 * conn)
@@ -224,7 +273,7 @@ void LibybUsbEnumerator::pluginEventReceived()
                         if (!conn)
                         {
                             conn.reset(new UsbShupito23Connection(m_runner));
-                            conn->setName(GenericUsbConnection::formatDeviceName(ev.intf.device()));
+                            conn->setName(GenericUsbConnection::formatDeviceName(ev.intf.device()), /*isDefault=*/true);
                             sConMgr2.addConnection(conn.data());
                         }
                         conn->setup(ev.intf);
@@ -272,7 +321,7 @@ void LibybUsbEnumerator::pluginEventReceived()
                             if (!conn)
                             {
                                 conn.reset(new UsbShupito22Connection(m_runner));
-                                conn->setName(GenericUsbConnection::formatDeviceName(ev.intf.device()));
+                                conn->setName(GenericUsbConnection::formatDeviceName(ev.intf.device()), /*isDefault=*/true);
                                 sConMgr2.addConnection(conn.data());
                             }
                             conn->setup(ev.intf);
@@ -301,17 +350,19 @@ void LibybUsbEnumerator::pluginEventReceived()
                             if (!conn)
                             {
                                 conn.reset(new UsbAcmConnection2(m_runner));
-                                conn->setName(QString("%1 @ %2").arg(st.intfname).arg(GenericUsbConnection::formatDeviceName(ev.intf.device())));
+                                conn->setName(QString("%1 @ %2").arg(st.intfname).arg(GenericUsbConnection::formatDeviceName(ev.intf.device())), /*isDefault=*/true);
                                 sConMgr2.addConnection(conn.data());
                             }
                             conn->setEnumeratedIntf(ev.intf);
                             conn->setRemovable(false);
+                            this->applyConfig(conn.data());
                             m_usb_acm_devices.insert(std::make_pair(ev.intf, conn));
                         }
                         break;
                     case yb::usb_plugin_event::a_remove:
                         {
                             std::map<yb::usb_device_interface, ConnectionPointer<UsbAcmConnection2> >::iterator it = m_usb_acm_devices.find(ev.intf);
+                            this->updateConfig(it->second.data());
                             it->second->clear();
                             it->second->setRemovable(true);
                             m_standby_usb_acm_devices.add(st, it->second.data());
@@ -328,7 +379,7 @@ void LibybUsbEnumerator::pluginEventReceived()
 #endif // HAVE_LIBYB
 
 ConnectionManager2::ConnectionManager2(QObject * parent)
-    : QObject(parent)
+    : QObject(parent), m_lastCompanionId(0)
 {
     Q_ASSERT(psConMgr2 == 0);
     psConMgr2 = this;
@@ -540,7 +591,7 @@ ConnectionPointer<ShupitoConnection> ConnectionManager2::createAutoShupito(PortC
     }
 
     ConnectionPointer<PortShupitoConnection> res(new PortShupitoConnection());
-    res->setName("Shupito at " % parentConn->name());
+    res->setName("Shupito at " % parentConn->name(), /*isDefault=*/true);
     res->setPort(ConnectionPointer<PortConnection>::fromPtr(parentConn));
     this->addConnection(res.data());
     connect(res.data(), SIGNAL(destroying()), this, SLOT(autoShupitoDestroyed()));
@@ -603,6 +654,16 @@ ConnectionPointer<PortConnection> ConnectionManager2::getConnWithConfig(quint8 t
                     return ConnectionPointer<PortConnection>::fromPtr(tunnel);
                 break;
             }
+            case CONNECTION_SHUPITO_TUNNEL:
+            {
+                qint64 id = cfg.value("companion", 0).toLongLong();
+                if(id == 0)
+                    return ConnectionPointer<PortConnection>();
+
+                if(id == m_conns[i]->getCompanionId())
+                    return ConnectionPointer<PortConnection>::fromPtr((ShupitoTunnel*)m_conns[i]);
+                break;
+            }
             default:
                 return ConnectionPointer<PortConnection>();
         }
@@ -614,5 +675,54 @@ ConnectionPointer<PortConnection> ConnectionManager2::getConnWithConfig(quint8 t
         return ConnectionPointer<PortConnection>::fromPtr(enumCon);
     }
 
+    if(type == CONNECTION_SHUPITO_TUNNEL)
+    {
+        qint64 id = cfg.value("companion", 0).toLongLong();
+        if(id == 0)
+            return ConnectionPointer<PortConnection>();
+
+        ConnectionPointer<PortConnection> tunnel(new ShupitoTunnel());
+        tunnel->applyConfig(cfg);
+        tunnel->setRemovable(false);
+        this->addConnection(tunnel.data());
+        return tunnel;
+    }
+
     return ConnectionPointer<PortConnection>();
+}
+
+void ConnectionManager2::connectAll()
+{
+    for(int i = 0; i < m_conns.size(); ++i)
+        if(m_conns[i]->isUsedByTab())
+            m_conns[i]->OpenConcurrent();
+}
+
+void ConnectionManager2::disconnectAll()
+{
+    for(int i = 0; i < m_conns.size(); ++i)
+        m_conns[i]->Close();
+}
+
+qint64 ConnectionManager2::generateCompanionId()
+{
+    qint64 id = QDateTime::currentMSecsSinceEpoch();
+    while(id <= m_lastCompanionId)
+        ++id;
+    m_lastCompanionId = id;
+    return id;
+}
+
+Connection *ConnectionManager2::getCompanionConnection(Connection *toConn)
+{
+    if(!toConn || toConn->getCompanionId() == 0)
+        return NULL;
+
+    for(int i = 0; i < m_conns.size(); ++i)
+    {
+        Connection *c = m_conns[i];
+        if(c != toConn && c->getCompanionId() == toConn->getCompanionId())
+            return c;
+    }
+    return NULL;
 }

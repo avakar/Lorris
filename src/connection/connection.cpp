@@ -11,7 +11,8 @@
 #include <QStringBuilder>
 
 Connection::Connection(ConnectionType type)
-    : m_state(st_disconnected), m_refcount(1), m_tabcount(0), m_removable(true), m_persistent(false), m_type(type)
+    : m_state(st_disconnected), m_defaultName(true), m_refcount(1), m_tabcount(0), m_removable(true),
+      m_persistent(false), m_type(type), m_companionId(0)
 {
 }
 
@@ -68,6 +69,13 @@ void Connection::markPresent()
     }
 }
 
+void Connection::setName(const QString& str, bool isDefault)
+{
+    this->setIDString(str);
+    m_defaultName = isDefault;
+    emit changed();
+}
+
 void Connection::OpenConcurrent()
 {
     if (m_state == st_disconnected)
@@ -83,17 +91,11 @@ void Connection::Close()
         break;
     case st_connecting:
     case st_connected:
+    case st_disconnecting:
         this->doClose();
         break;
+    default: break;
     }
-}
-
-void Connection::SetOpen(bool open)
-{
-    if (open)
-        this->SetState(st_connected);
-    else
-        this->SetState(st_disconnected);
 }
 
 void Connection::addRef()
@@ -127,13 +129,17 @@ void Connection::releaseTab()
 QHash<QString, QVariant> Connection::config() const
 {
     QHash<QString, QVariant> res;
-    res["name"] = this->name();
+    if (!this->hasDefaultName())
+        res["name"] = this->name();
+    res["companion"] = this->getCompanionId();
     return res;
 }
 
 bool Connection::applyConfig(QHash<QString, QVariant> const & config)
 {
-    this->setName(config.value("name").toString());
+    if (config.contains("name"))
+        this->setName(config.value("name").toString());
+    this->setCompanionId(config.value("companion", m_companionId).toLongLong());
     return true;
 }
 

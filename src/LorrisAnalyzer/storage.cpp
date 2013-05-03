@@ -47,12 +47,13 @@ void Storage::Clear()
     m_data.clear();
 }
 
-void Storage::addData(const QByteArray& data)
+QByteArray *Storage::addData(const QByteArray& data)
 {
     if(!m_packet)
-        return;
+        return NULL;
     m_data.push_back(data);
     ++m_size;
+    return &m_data.back();
 }
 
 void Storage::SaveToFile(WidgetArea *area, FilterTabWidget *filters)
@@ -150,10 +151,10 @@ void Storage::SaveToFile(QString filename, WidgetArea *area, FilterTabWidget *fi
 
         //Widgets
         buffer.writeBlockIdentifier(BLOCK_WIDGETS);
-        area->SaveWidgets(&buffer);
+        area->saveWidgets(&buffer);
 
         // Area settings
-        area->SaveSettings(&buffer);
+        area->saveSettings(&buffer);
 
         // Data index
         buffer.writeBlockIdentifier(BLOCK_DATA_INDEX);
@@ -345,10 +346,10 @@ analyzer_packet *Storage::loadFromFile(QString *name, quint8 load, WidgetArea *a
 
     //Widgets
     if(buffer.seekToNextBlock(BLOCK_WIDGETS, 0))
-        area->LoadWidgets(&buffer, !(load & STORAGE_WIDGETS));
+        area->loadWidgets(&buffer, !(load & STORAGE_WIDGETS));
 
     // Area settings
-    area->LoadSettings(&buffer);
+    area->loadSettings(&buffer);
 
     // Data index
     if((load & STORAGE_DATA) && buffer.seekToNextBlock(BLOCK_DATA_INDEX, 0))

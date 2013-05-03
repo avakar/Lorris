@@ -18,11 +18,15 @@ class chip_definition;
 
 enum MemoryTypes
 {
+    MEM_NONE    = 0,
+
     MEM_FLASH   = 1,
     MEM_EEPROM  = 2,
     MEM_FUSES   = 3,
     MEM_SDRAM   = 4,
-    MEM_COUNT   = 5
+    MEM_JTAG    = 5,
+
+    MEM_COUNT   = 6
 };
 
 struct page
@@ -62,6 +66,7 @@ public:
     }
 
     void LoadFromFile(const QString& path);
+    void LoadFromBin(const QString& path);
     void SaveToFile(const QString& path);
 
     void addRegion(quint32 pos, quint8 const * first, quint8 const * last, int lineno);

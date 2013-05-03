@@ -2,23 +2,42 @@
 #define SHUPITOCONN_H
 
 #include "connection.h"
-#include "../LorrisShupito/shupitopacket.h"
-#include "../LorrisShupito/shupitodesc.h"
+#include "../LorrisProgrammer/shupitopacket.h"
+#include "../LorrisProgrammer/shupitodesc.h"
+
+#include <QString>
+#include <QDateTime>
+#include <stdint.h>
+
+struct ShupitoFirmwareDetails
+{
+    uint8_t hw_major;
+    uint8_t hw_minor;
+    QDateTime fw_timestamp;
+    int16_t fw_zone_offset;
+    QString fw_revision;
+
+    bool empty() const;
+    QString firmwareFilename() const;
+};
 
 class ShupitoConnection : public Connection
 {
     Q_OBJECT
 
 public:
-    ShupitoConnection(ConnectionType type)
-        : Connection(type), m_supportsDescriptor(true)
-    {
-    }
+    ShupitoConnection(ConnectionType type);
 
     bool supportsDescriptor() const { return m_supportsDescriptor; }
     virtual void setSupportsDescriptor(bool value) { m_supportsDescriptor = value; }
 
+    bool isNamePersistable() const;
+    void persistName();
+
     virtual void requestDesc() = 0;
+    virtual size_t maxPacketSize() const = 0;
+
+    bool getFirmwareDetails(ShupitoFirmwareDetails & details) const;
 
 public slots:
     virtual void sendPacket(ShupitoPacket const & packet) = 0;
@@ -27,8 +46,17 @@ signals:
     void packetRead(ShupitoPacket const & packet);
     void descRead(ShupitoDesc const & desc);
 
+private slots:
+    void connectionStateChanged(ConnectionState state);
+    void descriptorChanged(ShupitoDesc const & desc);
+
 private:
+    void doPersist();
+
     bool m_supportsDescriptor;
+    ShupitoDesc::config const * m_renameConfig;
+    ShupitoFirmwareDetails m_fwDetails;
+    bool m_persistScheduled;
 };
 
 class PortShupitoConnection : public ShupitoConnection
@@ -44,6 +72,7 @@ public:
     void setSupportsDescriptor(bool value);
 
     virtual void requestDesc();
+    virtual size_t maxPacketSize() const { return 15; }
 
 public slots:
     void sendPacket(ShupitoPacket const & packet);

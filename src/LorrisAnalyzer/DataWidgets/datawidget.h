@@ -22,7 +22,7 @@
 #include "../../misc/gestureidentifier.h"
 #include "../undoactions.h"
 #include "../datafilter.h"
-#include "../../misc/qobjectpointer.h"
+#include "../../misc/qtobjectpointer.h"
 
 class WidgetArea;
 
@@ -272,8 +272,8 @@ private:
 
     QAction *m_lockAction;
     CloseLabel *m_closeLabel;
-    QLabel *m_icon_widget;
     QLabel *m_title_label;
+    QLabel *m_icon_widget;
     QFrame *m_sep_line;
     quint32 m_id;
     GestureIdentifier m_gestures;
@@ -286,6 +286,11 @@ class DataWidgetAddBtn : public QPushButton
 public:
     explicit DataWidgetAddBtn(QWidget *parent);
     ~DataWidgetAddBtn();
+
+    void setText(const QString &text);
+
+public slots:
+    void setTiny(bool tiny);
 
 protected:
     void mousePressEvent(QMouseEvent *event);

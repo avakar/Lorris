@@ -13,13 +13,36 @@ class UsbAcmConnection2
     Q_OBJECT
 
 public:
+    enum stop_bits_t
+    {
+        sb_one,
+        sb_one_and_half,
+        sb_two
+    };
+
+    enum parity_t
+    {
+        pp_none,
+        pp_odd,
+        pp_even
+    };
+
     UsbAcmConnection2(yb::async_runner & runner);
     ~UsbAcmConnection2();
 
     QString details() const { return m_details; }
 
     int baudRate() const { return m_baudrate; }
-    void setBaudRate(int value) { m_baudrate = value; emit changed(); }
+    void setBaudRate(int value);
+
+    stop_bits_t stopBits() const { return m_stop_bits; }
+    void setStopBits(stop_bits_t value);
+
+    parity_t parity() const { return m_parity; }
+    void setParity(parity_t value);
+
+    int dataBits() const { return m_data_bits; }
+    void setDataBits(int value);
 
     int vid() const { return m_vid; }
     int pid() const { return m_pid; }
@@ -58,10 +81,15 @@ protected:
 
 private slots:
     void incomingDataReady();
+    void sendCompleted();
 
 private:
     void setIntf(yb::usb_device_interface const & intf);
     void updateIntf();
+
+    yb::async_runner & m_runner;
+    yb::async_future<void> m_receive_worker;
+    yb::async_future<void> m_send_worker;
 
     bool m_enumerated;
 
@@ -71,6 +99,10 @@ private:
     QString m_intfName;
 
     int m_baudrate;
+    stop_bits_t m_stop_bits;
+    parity_t m_parity;
+    int m_data_bits;
+    void update_line_control(bool force = false);
 
     yb::usb_device_interface m_intf;
 
@@ -78,11 +110,8 @@ private:
 
     bool m_configurable;
 
-    yb::async_runner & m_runner;
-    yb::async_future<void> m_receive_worker;
-    yb::async_future<void> m_send_worker;
-
-    uint8_t m_read_buffer[64];
+    static size_t const read_buffer_count = 2;
+    uint8_t m_read_buffers[read_buffer_count][64];
 
     yb::async_channel<uint8_t> m_send_channel;
     std::vector<uint8_t> m_write_buffer;
@@ -93,6 +122,7 @@ private:
     void cleanupWorkers();
 
     ThreadChannel<uint8_t> m_incomingDataChannel;
+    ThreadChannel<void> m_sendCompleted;
 };
 
 #endif // USBACMCONN_H

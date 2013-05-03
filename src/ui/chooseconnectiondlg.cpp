@@ -10,6 +10,7 @@
 #include "../connection/connectionmgr2.h"
 #include "../connection/serialport.h"
 #include "../connection/tcpsocket.h"
+#include "../connection/shupitotunnel.h"
 #include <QMenu>
 #include <QPushButton>
 #include <QStyledItemDelegate>
@@ -30,6 +31,8 @@ static QString connectionStateString(ConnectionState state)
         return QObject::tr("(Connected)");
     case st_connect_pending:
         return QObject::tr("(Pending)");
+    case st_disconnecting:
+        return QObject::tr("(Disconnecting...)");
     default:
         return QString();
     }
@@ -174,6 +177,10 @@ ChooseConnectionDlg::ChooseConnectionDlg(QWidget *parent) :
     m_prog_btns[programmer_flip] = NULL; // can't be selected
     m_prog_btns[programmer_shupito] = ui->progShupito;
     m_prog_btns[programmer_avr232boot] = ui->progAVR232;
+    m_prog_btns[programmer_atsam] = ui->progAtsam;
+    m_prog_btns[programmer_avr109] = ui->progAVR109;
+
+    ui->programmerSelection->setVisible(false);
 
     QSignalMapper *map = new QSignalMapper(this);
     for(int i = 0; i < programmer_max; ++i)
@@ -211,7 +218,7 @@ ConnectionPointer<Connection> ChooseConnectionDlg::choose(PrimaryConnectionTypes
 
     if (PortConnection * pc = dynamic_cast<PortConnection *>(m_current.data()))
     {
-        if (pc->programmerType() == programmer_shupito)
+        if (pc->programmerType() == programmer_shupito && (m_allowedConns & pct_port_data) == 0)
         {
            ConnectionPointer<ShupitoConnection> sc = sConMgr2.createAutoShupito(pc);
            m_current = sc;
@@ -278,12 +285,32 @@ static void updateEditText(QLineEdit * w, QString const & value)
         w->setText(value);
 }
 
+static void updateComboText(QComboBox * w, QString const & value)
+{
+    if (w->currentText() != value)
+    {
+        int idx = w->findText(value);
+        w->setCurrentIndex(idx);
+        if (idx < 0)
+            w->setEditText(value);
+    }
+}
+
+static void updateComboIndex(QComboBox * w, int value)
+{
+    if (w->currentIndex() != value)
+        w->setCurrentIndex(value);
+}
+
 void ChooseConnectionDlg::updateDetailsUi(Connection * conn)
 {
     updateEditText(ui->connectionNameEdit, conn->name());
     ui->actionRemoveConnection->setEnabled(conn->removable());
     ui->actionConnect->setEnabled(conn->state() == st_disconnected);
-    ui->actionDisconnect->setEnabled(conn->state() == st_connected || conn->state() == st_connect_pending);
+    ui->actionDisconnect->setEnabled(conn->state() == st_connected || conn->state() == st_connect_pending || conn->state() == st_disconnecting);
+    ui->programmerSelection->setVisible(false);
+    ui->persistNameButton->setVisible(conn->isNamePersistable());
+    ui->persistNameButton->setEnabled(!conn->hasDefaultName());
 
     switch (conn->getType())
     {
@@ -312,7 +339,12 @@ void ChooseConnectionDlg::updateDetailsUi(Connection * conn)
         {
             UsbAcmConnection2 * c = static_cast<UsbAcmConnection2 *>(conn);
             ui->settingsStack->setCurrentWidget(ui->usbAcmConnPage);
-            updateEditText(ui->usbBaudRateEdit->lineEdit(), QString::number((int)c->baudRate()));
+
+            updateComboText(ui->usbBaudRateEdit, QString::number((int)c->baudRate()));
+            updateComboIndex(ui->usbParityCombo, (int)c->parity());
+            updateComboIndex(ui->usbStopBitsCombo, (int)c->stopBits());
+            updateComboText(ui->usbDataBitsCombo, QString::number(c->dataBits()));
+
             updateEditText(ui->usbVidEdit, QString("%1").arg(c->vid(), 4, 16, QChar('0')));
             updateEditText(ui->usbPidEdit, QString("%1").arg(c->pid(), 4, 16, QChar('0')));
             updateEditText(ui->usbAcmSnEdit, c->serialNumber());
@@ -323,12 +355,42 @@ void ChooseConnectionDlg::updateDetailsUi(Connection * conn)
             ui->usbPidEdit->setEnabled(editable);
             ui->usbAcmSnEdit->setEnabled(editable);
             ui->usbIntfNameEdit->setEnabled(editable);
+
+            ui->programmerSelection->setVisible(m_allowedConns & pct_port_programmable);
+            setActiveProgBtn(c->programmerType());
+        }
+        break;
+    case CONNECTION_USB_SHUPITO:
+    case CONNECTION_SHUPITO23:
+        {
+            ShupitoConnection * c = static_cast<ShupitoConnection *>(conn);
+            ShupitoFirmwareDetails fd;
+            if (c->getFirmwareDetails(fd))
+            {
+                ui->shupito23HardwareLabel->setText(QString("%1.%2").arg(fd.hw_major).arg(fd.hw_minor));
+                ui->shupito23FirmwareLabel->setText(fd.firmwareFilename());
+                ui->settingsStack->setCurrentWidget(ui->shupito23Page);
+            }
+            else
+            {
+                ui->settingsStack->setCurrentWidget(ui->noSettingsPage);
+            }
+        }
+        break;
+    case CONNECTION_SHUPITO_TUNNEL:
+        {
+            ShupitoTunnel * st = static_cast<ShupitoTunnel *>(conn);
+            ui->programmerSelection->setVisible(m_allowedConns & pct_port_programmable);
+            setActiveProgBtn(st->programmerType());
+
+            ui->settingsStack->setCurrentWidget(ui->noSettingsPage);
         }
         break;
     default:
         {
-            ui->settingsStack->setCurrentWidget(ui->homePage);
+            ui->settingsStack->setCurrentWidget(ui->noSettingsPage);
         }
+        break;
     }
 }
 
@@ -408,6 +470,7 @@ void ChooseConnectionDlg::on_connectionsList_itemSelectionChanged()
         ui->confirmBox->button(QDialogButtonBox::Ok)->setEnabled(false);
         ui->connectionNameEdit->setText(QString());
         ui->connectionNameEdit->setEnabled(false);
+        ui->persistNameButton->setVisible(false);
         return;
     }
 
@@ -469,7 +532,7 @@ void ChooseConnectionDlg::on_spBaudRateEdit_editTextChanged(const QString &arg1)
 void ChooseConnectionDlg::progBtn_clicked(int programmer)
 {
     setActiveProgBtn(programmer);
-    if (SerialPort * c = dynamic_cast<SerialPort *>(m_current.data()))
+    if (PortConnection * c = dynamic_cast<PortConnection *>(m_current.data()))
         c->setProgrammerType(programmer);
 }
 
@@ -529,6 +592,45 @@ void ChooseConnectionDlg::on_usbIntfNameEdit_textChanged(QString const & value)
     static_cast<UsbAcmConnection2 *>(m_current.data())->setIntfName(value);
 }
 
+void ChooseConnectionDlg::on_usbBaudRateEdit_textChanged(QString const & value)
+{
+    if (!m_current)
+        return;
+    Q_ASSERT(dynamic_cast<UsbAcmConnection2 *>(m_current.data()) != 0);
+
+    bool ok;
+    uint baud_rate = value.toUInt(&ok);
+    if (ok)
+        static_cast<UsbAcmConnection2 *>(m_current.data())->setBaudRate(baud_rate);
+}
+
+void ChooseConnectionDlg::on_usbDataBitsCombo_currentIndexChanged(int value)
+{
+    if (!m_current)
+        return;
+    Q_ASSERT(dynamic_cast<UsbAcmConnection2 *>(m_current.data()) != 0);
+
+    static_cast<UsbAcmConnection2 *>(m_current.data())->setDataBits(ui->usbDataBitsCombo->itemText(value).toInt());
+}
+
+void ChooseConnectionDlg::on_usbParityCombo_currentIndexChanged(int value)
+{
+    if (!m_current)
+        return;
+    Q_ASSERT(dynamic_cast<UsbAcmConnection2 *>(m_current.data()) != 0);
+
+    static_cast<UsbAcmConnection2 *>(m_current.data())->setParity((UsbAcmConnection2::parity_t)value);
+}
+
+void ChooseConnectionDlg::on_usbStopBitsCombo_currentIndexChanged(int value)
+{
+    if (!m_current)
+        return;
+    Q_ASSERT(dynamic_cast<UsbAcmConnection2 *>(m_current.data()) != 0);
+
+    static_cast<UsbAcmConnection2 *>(m_current.data())->setStopBits((UsbAcmConnection2::stop_bits_t)value);
+}
+
 void ChooseConnectionDlg::on_actionConnect_triggered()
 {
     if (!m_current)
@@ -551,4 +653,10 @@ void ChooseConnectionDlg::on_actionClone_triggered()
     ConnectionPointer<Connection> new_conn(m_current->clone());
     sConMgr2.addUserOwnedConn(new_conn.data());
     this->focusNewConn(new_conn.take());
+}
+
+void ChooseConnectionDlg::on_persistNameButton_clicked()
+{
+    Q_ASSERT(m_current && m_current->isNamePersistable());
+    m_current->persistName();
 }

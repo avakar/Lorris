@@ -20,6 +20,7 @@ enum ConnectionState {
     st_disconnected,
     st_connecting,
     st_connected,
+    st_disconnecting,
     st_missing,
     st_connect_pending
 };
@@ -76,7 +77,11 @@ public:
     QString const & GetIDString() const { return m_idString; }
 
     QString const & name() const { return m_idString; }
-    void setName(const QString& str) { this->setIDString(str); }
+    void setName(const QString& str, bool isDefault = false);
+    bool hasDefaultName() const { return m_defaultName; }
+
+    qint64 getCompanionId() const { return m_companionId; }
+    void setCompanionId(qint64 id) { m_companionId = id; }
 
     virtual QString details() const;
 
@@ -91,6 +96,8 @@ public:
     void addTabRef();
     void releaseTab();
 
+    bool isUsedByTab() const { return m_tabcount > 0; }
+
     // Emits the `destroying` signal to break all references,
     // then deletes the object.
     void releaseAll();
@@ -104,6 +111,9 @@ public:
     virtual ConnectionPointer<Connection> clone();
 
     bool isMissing() const;
+
+    virtual bool isNamePersistable() const { return false; }
+    virtual void persistName() {}
 
 signals:
     void connected(bool connected);
@@ -122,7 +132,6 @@ signals:
 protected:
     ~Connection();
     void SetState(ConnectionState state);
-    void SetOpen(bool open);
 
     void markMissing();
     void markPresent();
@@ -133,11 +142,13 @@ protected:
 private:
     ConnectionState m_state;
     QString m_idString;
+    bool m_defaultName;
     int m_refcount;
     int m_tabcount;
     bool m_removable;
     bool m_persistent;
     quint8 m_type;
+    qint64 m_companionId;
 };
 
 Q_DECLARE_METATYPE(Connection *)

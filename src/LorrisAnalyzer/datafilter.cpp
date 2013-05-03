@@ -6,6 +6,7 @@
 ***********************************************/
 
 #include <QScrollArea>
+#include <QApplication>
 
 #include "datafilter.h"
 #include "../misc/utils.h"
@@ -18,6 +19,7 @@ DataFilter::DataFilter(quint8 type, quint32 id, QString name, QObject *parent) :
     m_id = id;
     m_name = name;
     m_layout = NULL;
+    m_lastIdx = 0;
 }
 
 DataFilter::~DataFilter()
@@ -110,8 +112,10 @@ void DataFilter::widgetMouseStatus(bool in, const data_widget_info& info, qint32
     if(parent != -1)
         return;
 
-    m_layout->setHightlightLabel(info.pos, in);
-    if(in)
+    if(m_layout)
+        m_layout->setHightlightLabel(info.pos, in);
+
+    if(in && (qApp->keyboardModifiers() & Qt::ShiftModifier))
         emit activateTab();
 }
 
@@ -207,7 +211,7 @@ void FilterCondition::save(DataFileParser *file)
     file->writeVal(m_type);
 }
 
-void FilterCondition::load(DataFileParser *file)
+void FilterCondition::load(DataFileParser* /*file*/)
 {
 
 }

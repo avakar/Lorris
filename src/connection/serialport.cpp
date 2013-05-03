@@ -56,7 +56,7 @@ QString SerialPort::details() const
 
 void SerialPort::connectResultSer(bool opened)
 {
-    this->SetOpen(opened);
+    this->SetState(opened? st_connected: st_disconnected);
 }
 
 void SerialPort::doClose()
@@ -98,7 +98,7 @@ void SerialPort::doClose()
         }
     }
 
-    this->SetOpen(false);
+    this->SetState(st_disconnected);
 }
 
 void SerialPort::SendData(const QByteArray& data)
@@ -168,8 +168,21 @@ void SerialPort::setFriendlyName(QString const & value)
     if (m_friendlyName != value)
     {
         m_friendlyName = value;
+
+        // FIXME: better way to detect shupito?
+        if(m_friendlyName.startsWith("Shupito Programmer"))
+            m_programmer_type = programmer_shupito;
+
         emit changed();
     }
+}
+
+void SerialPort::setBaudRate(int value)
+{
+    m_rate = value;
+    if(isOpen())
+        m_port->setBaudRate(value);
+    emit changed();
 }
 
 void SerialPort::socketError(SocketError err)

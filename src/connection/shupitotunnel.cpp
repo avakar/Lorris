@@ -9,7 +9,7 @@
 #include <QComboBox>
 
 #include "shupitotunnel.h"
-#include "../LorrisShupito/shupito.h"
+#include "../LorrisProgrammer/shupito.h"
 
 #include "../WorkTab/WorkTab.h"
 #include "../WorkTab/WorkTabInfo.h"
@@ -30,7 +30,7 @@ void ShupitoTunnel::doOpen()
 {
     if(m_shupito && !this->isOpen())
     {
-        this->SetOpen(true);
+        this->SetState(st_connected);
 
         if(!dataSigConnected)
         {
