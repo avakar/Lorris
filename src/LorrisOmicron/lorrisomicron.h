@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include "../WorkTab/WorkTab.h"
 #include "../ui/connectbutton.h"
+#include "../connection/shupitoconn.h"
 #include <stdint.h>
 
 namespace Ui {
