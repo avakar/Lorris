@@ -52,6 +52,10 @@ ShupitoMode *ShupitoMode::getMode(quint8 mode, Shupito *shupito, ShupitoDesc *de
         if (desc->getConfig("633125ab-32e0-49ec-b240-7d845bb70b2d"))
             return new ShupitoSpiFlash(shupito);
         return nullptr;
+    case MODE_JTAGSPIFLASH:
+        if (desc->getConfig("fe047e35-dec8-48ab-b194-e3762c8f6b66"))
+            return new ShupitoJtagSpiFlash(shupito);
+        return nullptr;
     case MODE_JTAG:
         if (desc->getConfig("fe047e35-dec8-48ab-b194-e3762c8f6b66"))
             return new ShupitoJtag(shupito);

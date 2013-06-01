@@ -32,6 +32,7 @@ enum Modes
     MODE_CC25XX,
     MODE_SPIFLASH,
     MODE_JTAG,
+    MODE_JTAGSPIFLASH,
 
     MODE_COUNT
 };
