@@ -16,7 +16,7 @@ QString ShupitoFirmwareDetails::firmwareFilename() const
 }
 
 ShupitoConnection::ShupitoConnection(ConnectionType type)
-    : Connection(type), m_renameConfig(nullptr), m_persistScheduled(false)
+    : Connection(type), m_renameConfig(nullptr), m_persistScheduled(false), m_supportsDescriptor(true)
 {
     connect(this, SIGNAL(descRead(ShupitoDesc)), this, SLOT(descriptorChanged(ShupitoDesc)));
     connect(this, SIGNAL(stateChanged(ConnectionState)), this, SLOT(connectionStateChanged(ConnectionState)));
@@ -154,7 +154,7 @@ void PortShupitoConnection::doOpen()
     switch (m_port->state())
     {
     case st_connected:
-        m_parserState = pst_init0;
+        m_parserState = this->supportsDescriptor()? pst_init0: pst_discard;
         this->SetState(st_connected);
         break;
     case st_disconnecting:
@@ -195,7 +195,7 @@ void PortShupitoConnection::portStateChanged(ConnectionState state)
         this->SetState(st_disconnecting);
         break;
     case st_connected:
-        m_parserState = pst_init0;
+        m_parserState = this->supportsDescriptor()? pst_init0: pst_discard;
         this->SetState(st_connected);
         break;
     default: break;
@@ -347,4 +347,11 @@ void PortShupitoConnection::handlePacket(ShupitoPacket const & packet)
     {
         emit packetRead(packet);
     }
+}
+
+void PortShupitoConnection::setSupportsDescriptor(bool supported)
+{
+    this->ShupitoConnection::setSupportsDescriptor(supported);
+    if (!supported && m_parserState == pst_init0)
+        m_parserState = pst_discard;
 }

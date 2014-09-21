@@ -129,6 +129,9 @@ SOURCES += ui/mainwindow.cpp \
     LorrisAnalyzer/undoactions.cpp \
     LorrisAnalyzer/filtertabwidget.cpp \
     LorrisAnalyzer/datafilter.cpp \
+    LorrisOmicron/lorrisomicron.cpp \
+    LorrisOmicron/lorrisomicroninfo.cpp \
+    ui/digitaltracegraph.cpp \
     misc/threadchannel.cpp \
     ui/hookedlineedit.cpp \
     LorrisProgrammer/shupitopacket.cpp \
@@ -266,6 +269,9 @@ HEADERS += ui/mainwindow.h \
     LorrisAnalyzer/undoactions.h \
     LorrisAnalyzer/filtertabwidget.h \
     LorrisAnalyzer/datafilter.h \
+    LorrisOmicron/lorrisomicron.h \
+    LorrisOmicron/lorrisomicroninfo.h \
+    ui/digitaltracegraph.h \
     misc/threadchannel.h \
     ui/hookedlineedit.h \
     LorrisProgrammer/shupitopacket.h \
@@ -324,6 +330,8 @@ FORMS += \
     LorrisAnalyzer/DataWidgets/GraphWidget/graphmarkerdialog.ui \
     LorrisAnalyzer/DataWidgets/statusmanager.ui \
     LorrisAnalyzer/DataWidgets/formuladialog.ui \
+    LorrisAnalyzer/filterdialog.ui \
+    LorrisOmicron/lorrisomicron.ui \
     LorrisAnalyzer/filterdialog.ui \
     LorrisProgrammer/ui/overvccdialog.ui \
     LorrisProgrammer/ui/miniprogrammerui.ui \

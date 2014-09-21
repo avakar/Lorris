@@ -36,6 +36,7 @@ static const QString keys_quint32[] =
     "general/compress_block",    // CFG_QUINT32_COMPRESS_BLOCK
     "shupito/spi_tunnel_speed",  // CFG_QUINT32_SPI_TUNNEL_SPEED
     "shupito/spi_tunnel_modes",  // CFG_QUINT32_SPI_TUNNEL_MODES
+    "omicron/interpolation",     // CFG_QUINT32_OMICRON_INTERPOLATION
 };
 
 static const quint32 def_quint32[] =
@@ -61,6 +62,7 @@ static const quint32 def_quint32[] =
     10*1024*1024,                // CFG_QUINT32_COMPRESS_BLOCK
     500000,                      // CFG_QUINT32_SPI_TUNNEL_SPEED
     0x200,                       // CFG_QUINT32_SPI_TUNNEL_MODES
+    0,                           // CFG_QUINT32_OMICRON_INTERPOLATION
 };
 
 static const QString keys_string[] =

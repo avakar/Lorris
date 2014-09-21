@@ -28,6 +28,9 @@ class ShupitoConnection : public Connection
 public:
     ShupitoConnection(ConnectionType type);
 
+    bool supportsDescriptor() const { return m_supportsDescriptor; }
+    virtual void setSupportsDescriptor(bool value) { m_supportsDescriptor = value; }
+
     bool isNamePersistable() const;
     void persistName();
 
@@ -50,6 +53,7 @@ private slots:
 private:
     void doPersist();
 
+    bool m_supportsDescriptor;
     ShupitoDesc::config const * m_renameConfig;
     ShupitoFirmwareDetails m_fwDetails;
     bool m_persistScheduled;
@@ -64,6 +68,8 @@ public:
 
     ConnectionPointer<PortConnection> const & port() const { return m_port; }
     void setPort(ConnectionPointer<PortConnection> const & port);
+
+    void setSupportsDescriptor(bool value);
 
     virtual void requestDesc();
     virtual size_t maxPacketSize() const { return 15; }
