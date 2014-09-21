@@ -104,6 +104,8 @@ private:
     std::map<Conn *, typename std::map<Info, Conn *>::iterator> m_inverse_map;
 };
 
+class OmicronAnalyzerConnection;
+
 class LibybUsbEnumerator : public QObject
 {
     Q_OBJECT
@@ -160,6 +162,9 @@ private:
     std::map<yb::usb_device_interface, ConnectionPointer<UsbShupito23Connection> > m_shupito23_devices;
     StandbyDeviceList<UsbShupito23Connection, usb_interface_standby> m_standby_shupito23_devices;
 
+    std::map<yb::usb_device_interface, ConnectionPointer<OmicronAnalyzerConnection> > m_omicronanal_devices;
+    StandbyDeviceList<OmicronAnalyzerConnection, usb_interface_standby> m_standby_omicronanal_devices;
+
     std::map<yb::usb_device_interface, ConnectionPointer<UsbAcmConnection2> > m_usb_acm_devices;
     StandbyDeviceList<UsbAcmConnection2, usb_interface_standby> m_standby_usb_acm_devices;
     std::map<usb_interface_standby, yb::usb_device_interface> m_usb_acm_devices_by_info;
@@ -172,6 +177,7 @@ private:
     QList<QVariant> m_connConfigs;
     void updateConfig(UsbAcmConnection2 * conn);
     void applyConfig(UsbAcmConnection2 * conn);
+    void handlePluginEvent(yb::usb_plugin_event const & ev);
 };
 
 #endif // HAVE_LIBYB

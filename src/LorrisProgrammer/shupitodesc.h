@@ -12,8 +12,33 @@
 #include <vector>
 #include <map>
 #include <QHash>
+#include <stdexcept>
 
 #include "shupitopacket.h"
+
+class ShupitoDescError
+        : std::runtime_error
+{
+public:
+    enum error_code_t {
+        e_no_header,
+        e_unknown_version,
+        e_too_short,
+    };
+
+    explicit ShupitoDescError(error_code_t err)
+        : std::runtime_error("Invalid descriptor"), m_err(err)
+    {
+    }
+
+    error_code_t error_code() const
+    {
+        return m_err;
+    }
+
+private:
+    error_code_t m_err;
+};
 
 class ShupitoDesc
 {

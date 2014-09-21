@@ -28,15 +28,23 @@ void ShupitoDesc::AddData(const QByteArray& data)
     quint8 *first = (quint8*)m_data.data();
     quint8 *last = (quint8*)(first + m_data.size());
 
-    if((last - first) < 17 || *first++ != 1)
-        return Utils::showErrorBox("Invalid descriptor.");
+    if ((last - first) < 17)
+        throw ShupitoDescError(ShupitoDescError::e_no_header);
+
+    quint8 ver = *first++;
+
+    if (ver != 1 && ver != 2)
+        throw ShupitoDescError(ShupitoDescError::e_unknown_version);
 
     m_guid = makeGuid(first);
     first += 16;
 
-    quint8 base_cmd = 1;
-    std::vector<quint8> act_seq;
-    parseGroupConfig(first, last, base_cmd, act_seq);
+    if (ver == 1)
+    {
+        quint8 base_cmd = 1;
+        std::vector<quint8> act_seq;
+        parseGroupConfig(first, last, base_cmd, act_seq);
+    }
 }
 
 // Device guid: 093d7f32-cdc6-4928-955d-513d17a85358 for Shupito 2.0
@@ -59,7 +67,7 @@ QString ShupitoDesc::makeGuid(quint8 *data)
 void ShupitoDesc::parseGroupConfig(quint8 *& first, quint8 *& last, quint8& base_cmd, std::vector<quint8>& actseq)
 {
     if(first == last)
-        return Utils::showErrorBox("Invalid descriptor.");
+        throw ShupitoDescError(ShupitoDescError::e_too_short);
 
     if(*first == 0)
     {
@@ -100,7 +108,7 @@ void ShupitoDesc::parseGroupConfig(quint8 *& first, quint8 *& last, quint8& base
 void ShupitoDesc::parseConfig(quint8 *& first, quint8 *& last, quint8& base_cmd, std::vector<quint8>& actseq)
 {
     if ((last - first) < 19)
-        return Utils::showErrorBox("Invalid descriptor.");
+        throw ShupitoDescError(ShupitoDescError::e_too_short);
 
     config cfg;
     cfg.flags = *first++;
@@ -115,7 +123,7 @@ void ShupitoDesc::parseConfig(quint8 *& first, quint8 *& last, quint8& base_cmd,
 
     quint8 data_len = *first++;
     if (last - first < data_len)
-        return Utils::showErrorBox("Invalid descriptor.");
+        throw ShupitoDescError(ShupitoDescError::e_too_short);
 
     cfg.data.assign(first, first + data_len);
     first += data_len;

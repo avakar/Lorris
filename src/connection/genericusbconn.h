@@ -10,6 +10,7 @@
 
 #include "connection.h"
 #include "usbacmconn.h"
+#include "../LorrisProgrammer/shupitodesc.h"
 #include <libyb/async/async_runner.hpp>
 #include <libyb/usb/usb_device.hpp>
 
@@ -29,8 +30,8 @@ public:
     void clearDevice();
     yb::usb_device device() const;
 
+    static bool isYbIntf(yb::usb_device_interface const & intf, ShupitoDesc & desc);
     static bool isShupito20Device(yb::usb_device const & dev);
-    static bool isShupito23Device(yb::usb_device const & dev);
     static bool isFlipDevice(yb::usb_device const & dev);
     bool isFlipDevice() const;
     static bool isSTLink32LDevice(yb::usb_device const & dev);

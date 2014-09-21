@@ -474,6 +474,7 @@ libyb {
         connection/usbacmconn.cpp \
         connection/usbshupito22conn.cpp \
         connection/usbshupito23conn.cpp \
+        connection/omicronanalconn.cpp \
         LorrisProgrammer/programmers/flipprogrammer.cpp \
         LorrisProgrammer/programmers/stm32programmer.cpp \
         connection/stm32connection.cpp
@@ -483,6 +484,7 @@ libyb {
         connection/usbacmconn.h \
         connection/usbshupito22conn.h \
         connection/usbshupito23conn.h \
+        connection/omicronanalconn.h \
         LorrisProgrammer/programmers/flipprogrammer.h \
         LorrisProgrammer/programmers/stm32programmer.h \
         connection/stm32connection.h \
