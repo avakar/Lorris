@@ -2,6 +2,8 @@
 #include <QPaintEvent>
 #include <QPainter>
 
+static const int row_header_width = 100;
+
 static size_t clamp(double v)
 {
     if (v < 0)
@@ -11,103 +13,15 @@ static size_t clamp(double v)
     return (size_t)v;
 }
 
-size_t DigitalTraceGraph::trace_t::length() const
-{
-    if (blocks.empty())
-        return 0;
-
-    std::pair<size_t, block_info> const & bi = *blocks.rbegin();
-    return bi.first + bi.second.block_length * bi.second.repeat_count;
-}
-
-bool DigitalTraceGraph::trace_t::sample(size_t index) const
-{
-    std::map<size_t, block_info>::const_iterator it = blocks.upper_bound(index);
-    Q_ASSERT(it != blocks.begin());
-    --it;
-
-    index -= it->first;
-    index %= it->second.block_length;
-
-    return data[it->second.block_offset + index];
-}
-
-static void reduce_block(std::pair<bool, bool> & res, std::vector<bool> const & v, size_t first, size_t last)
-{
-    for (; (!res.first || !res.second) && first != last; ++first)
-    {
-        if (v[first])
-            res.second = true;
-        else
-            res.first = true;
-    }
-}
-
-std::pair<bool, bool> DigitalTraceGraph::trace_t::multisample(size_t first, size_t last) const
-{
-    sample_ptr first_ptr = this->get_sample_ptr(first);
-    sample_ptr last_ptr = this->get_sample_ptr(last);
-
-    std::pair<bool, bool> res(false, false);
-
-    if (first_ptr.block_it == last_ptr.block_it
-        && first_ptr.repeat_index == last_ptr.repeat_index)
-    {
-        reduce_block(res, data,
-            first_ptr.block_it->second.block_offset + first_ptr.repeat_offset,
-            last_ptr.block_it->second.block_offset + last_ptr.repeat_offset);
-        return res;
-    }
-
-    std::map<size_t, block_info>::const_iterator first_complete = first_ptr.block_it;
-    std::map<size_t, block_info>::const_iterator last_complete = last_ptr.block_it;
-    if (first_ptr.last_repeat)
-    {
-        // Handle partial block
-        reduce_block(res, data, first_ptr.block_it->second.block_offset + first_ptr.repeat_offset,
-            first_ptr.block_it->second.block_offset + first_ptr.block_it->second.block_length);
-        ++first_complete;
-    }
-
-    if (last_ptr.first_repeat)
-    {
-        reduce_block(res, data, last_ptr.block_it->second.block_offset,
-            last_ptr.block_it->second.block_offset + last_ptr.repeat_offset);
-        if (first_complete == last_complete)
-            return res;
-        --last_complete;
-    }
-
-    reduce_block(res, data, first_complete->second.block_offset, last_complete->second.block_offset + last_complete->second.block_length);
-    return res;
-}
-
-DigitalTraceGraph::sample_ptr DigitalTraceGraph::trace_t::get_sample_ptr(size_t sample) const
-{
-    sample_ptr res;
-    res.block_it = blocks.upper_bound(sample);
-    Q_ASSERT(res.block_it != blocks.begin());
-    --res.block_it;
-
-    res.block_sample_offset = sample - res.block_it->first;
-    res.repeat_index = res.block_sample_offset / res.block_it->second.block_length;
-    res.repeat_offset = res.block_sample_offset % res.block_it->second.block_length;
-    res.data_offset = res.block_it->second.block_offset + res.repeat_offset;
-
-    res.first_repeat = res.repeat_index == 0;
-    res.last_repeat = res.repeat_index == res.block_it->second.repeat_count - 1;
-    return res;
-}
-
 DigitalTraceGraph::DigitalTraceGraph(QWidget *parent)
-    : QWidget(parent), m_panx(0), m_secondsPerPixel(1.0), m_interpolation(i_point)
+    : QWidget(parent), m_trace_set(0), m_panx(row_header_width*-0.003), m_secondsPerPixel(0.003), m_interpolation(i_point)
 {
     this->setMouseTracking(true);
 }
 
-void DigitalTraceGraph::setChannelData(std::vector<trace_t> & data)
+void DigitalTraceGraph::setTraceSet(signal_trace_set const * trace_set)
 {
-    m_domain.traces.swap(data);
+    m_trace_set = trace_set;
     this->update();
 }
 
@@ -122,107 +36,134 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
 
     int y = 0;
 
-    domain * const selected_domain = &m_domain;
-    for (size_t i = 0; i < selected_domain->traces.size(); ++i)
+    signal_trace_set const * const selected_domain = m_trace_set;
+    if (!selected_domain)
+        return;
+
+    uint64_t first_sample_index = selected_domain->first_sample_index();
+    for (int channel_no = 0; channel_no != m_channels.size(); ++channel_no)
     {
-        trace_t const & t = selected_domain->traces[i];
+        p.setClipping(false);
 
-        size_t channel_length = t.length();
-        int w = this->width();
-        if (m_secondsPerPixel*t.samples_per_second >= 1)
+        auto const & channel = m_channels[channel_no];
+        p.drawText(2, y + row_height, channel.name);
+
+        auto trace_range = selected_domain->traces.equal_range(channel.id);
+        for (auto trace_it = trace_range.first; trace_it != trace_range.second; ++trace_it)
         {
-            bool have_last_sample_pos = false, have_last_ft = false;
-            double last_sample_pos = 0;
-            std::pair<bool, bool> last_ft;
-            for (int x = 0; x < w; ++x)
-            {
-                double sample_pos = (x*m_secondsPerPixel+m_panx)*t.samples_per_second;
-                if (sample_pos < 0)
-                    continue;
-                if (sample_pos > channel_length)
-                    break;
+            signal_trace const & t = trace_it->second;
+            size_t channel_length = t.length();
+            if (channel_length == 0)
+                continue;
 
-                if (have_last_sample_pos)
+            int w = this->width();
+            p.setClipRect(row_header_width, 0, w, this->height());
+
+            if (m_secondsPerPixel*t.samples_per_second >= 1)
+            {
+                bool have_last_sample_pos = false, have_last_ft = false;
+                double last_sample_pos = 0;
+                std::pair<bool, bool> last_ft;
+                for (int x = row_header_width; x < w; ++x)
                 {
-                    std::pair<bool, bool> ft = t.multisample(last_sample_pos, sample_pos);
-                    if (have_last_ft)
+                    double sample_pos = (x*m_secondsPerPixel+m_panx - t.start_time())*t.samples_per_second + first_sample_index;
+                    if (sample_pos < 0)
+                        continue;
+                    if (sample_pos > channel_length)
+                        break;
+
+                    if (have_last_sample_pos)
                     {
-                        if ((ft.first && ft.second) || (ft.second && !last_ft.second) || (ft.first && !last_ft.first))
-                            p.drawLine(x, y + row_padding, x, y + row_height - row_padding);
-                        else if (ft.first && last_ft.first)
-                            p.drawPoint(x, y + row_height - row_padding);
-                        else if (ft.second && last_ft.second)
-                            p.drawPoint(x, y + row_padding);
+                        std::pair<bool, bool> ft = t.multisample(last_sample_pos, sample_pos);
+                        if (have_last_ft)
+                        {
+                            if ((ft.first && ft.second) || (ft.second && !last_ft.second) || (ft.first && !last_ft.first))
+                                p.drawLine(x, y + row_padding, x, y + row_height - row_padding);
+                            else if (ft.first && last_ft.first)
+                                p.drawPoint(x, y + row_height - row_padding);
+                            else if (ft.second && last_ft.second)
+                                p.drawPoint(x, y + row_padding);
+                        }
+                        last_ft = ft;
+                        have_last_ft = true;
                     }
-                    last_ft = ft;
-                    have_last_ft = true;
+                    last_sample_pos = sample_pos;
+                    have_last_sample_pos = true;
                 }
-                last_sample_pos = sample_pos;
-                have_last_sample_pos = true;
             }
-        }
-        else
-        {
-            size_t first_sample = clamp(m_panx*t.samples_per_second);
-            size_t last_sample = clamp((w*m_secondsPerPixel+m_panx)*t.samples_per_second + 2);
-
-            QPoint last_point;
-            double last_x;
-            for (size_t cur = first_sample; cur != last_sample; ++cur)
+            else
             {
-                bool sample = t.sample(cur);
+                size_t first_sample = clamp((row_header_width*m_secondsPerPixel+m_panx-t.start_time())*t.samples_per_second+first_sample_index);
+                size_t last_sample = clamp((w*m_secondsPerPixel+m_panx - t.start_time())*t.samples_per_second + 2+first_sample_index);
+                if (last_sample > t.length())
+                    last_sample = t.length();
 
-                double x = (cur/t.samples_per_second-m_panx)/m_secondsPerPixel;
-                QPoint pt(
-                    (int)x,
-                    y + (sample? row_padding: row_height - row_padding));
+                if (first_sample > last_sample)
+                    first_sample = last_sample;
 
-                if (cur != first_sample)
+                QPoint last_point;
+                double last_x;
+                for (size_t cur = first_sample; cur != last_sample; ++cur)
                 {
-                    if (m_interpolation == i_linear || last_point.y() == pt.y())
-                    {
-                        p.drawLine(last_point, pt);
-                    }
-                    else
-                    {
-                        Q_ASSERT(m_interpolation == i_point);
+                    bool sample = t.sample(cur);
 
-                        int midpoint = (int)((x + last_x) / 2);
-                        p.drawLine(last_point.x(), last_point.y(), midpoint, last_point.y());
-                        p.drawLine(midpoint, last_point.y(), midpoint, pt.y());
-                        p.drawLine(midpoint, pt.y(), pt.x(), pt.y());
+                    double x = (((double)cur-first_sample_index)/t.samples_per_second-m_panx+t.start_time())/m_secondsPerPixel;
+                    QPoint pt(
+                        (int)x,
+                        y + (sample? row_padding: row_height - row_padding));
+
+                    if (cur != first_sample)
+                    {
+                        if (m_interpolation == i_linear || last_point.y() == pt.y())
+                        {
+                            p.drawLine(last_point, pt);
+                        }
+                        else
+                        {
+                            Q_ASSERT(m_interpolation == i_point);
+
+                            int midpoint = (int)((x + last_x) / 2);
+                            p.drawLine(last_point.x(), last_point.y(), midpoint, last_point.y());
+                            p.drawLine(midpoint, last_point.y(), midpoint, pt.y());
+                            p.drawLine(midpoint, pt.y(), pt.x(), pt.y());
+                        }
                     }
+
+                    last_point = pt;
+                    last_x = x;
                 }
-
-                last_point = pt;
-                last_x = x;
             }
         }
 
         y += row_height;
     }
 
-    p.drawText(2, this->height() - 10, QString("samples/s: %1, seconds/px: %2, panx: %4, x: %3").arg(selected_domain->traces[0].samples_per_second, 0, 'f').arg(m_secondsPerPixel, 0, 'f', 15).arg(m_lastCursorPos.x()).arg(m_panx));
+    p.setClipping(false);
+    p.drawText(2, this->height() - 10, QString("seconds/px: %1, panx: %3, x: %2").arg(m_secondsPerPixel, 0, 'f', 15).arg(m_lastCursorPos.x()).arg(m_panx));
 }
 
 void DigitalTraceGraph::zoomToAll()
 {
     double min_time, max_time;
 
-    domain * const selected_domain = &m_domain;
-    if (selected_domain->traces.empty())
+    signal_trace_set const * const selected_domain = m_trace_set;
+    if (!selected_domain || selected_domain->traces.empty())
         return;
 
-    for (size_t i = 0; i < selected_domain->traces.size(); ++i)
-    {
-        trace_t const & m = selected_domain->traces[i];
-        double start_time = m.start_time();
-        double end_time = m.end_time();
+    uint64_t first_sample_index = selected_domain->first_sample_index();
 
-        if (i == 0)
+    bool first = true;
+    for (auto && kv: selected_domain->traces)
+    {
+        signal_trace const & m = kv.second;
+        double start_time = (m.samples_from_epoch-first_sample_index)/m.samples_per_second;
+        double end_time = (m.samples_from_epoch+m.length()-first_sample_index)/m.samples_per_second;
+
+        if (first)
         {
             min_time = start_time;
             max_time = end_time;
+            first = false;
         }
         else
         {
@@ -231,8 +172,11 @@ void DigitalTraceGraph::zoomToAll()
         }
     }
 
-    m_secondsPerPixel = (max_time - min_time) / this->width();
-    m_panx = min_time;
+    if (first)
+        return;
+
+    m_secondsPerPixel = (max_time - min_time) / (this->width() - row_header_width + 1);
+    m_panx = min_time - row_header_width*m_secondsPerPixel;
     this->update();
 }
 
@@ -258,10 +202,24 @@ void DigitalTraceGraph::mouseMoveEvent(QMouseEvent * event)
 
 void DigitalTraceGraph::wheelEvent(QWheelEvent * event)
 {
-    int delta = event->delta();
-    m_panx += event->x() * m_secondsPerPixel;
+    this->zoom(event->delta(), event->x());
+}
+
+void DigitalTraceGraph::zoomIn()
+{
+    this->zoom(120, this->width() / 2);
+}
+
+void DigitalTraceGraph::zoomOut()
+{
+    this->zoom(-120, this->width() / 2);
+}
+
+void DigitalTraceGraph::zoom(int delta, int pivot)
+{
+    m_panx += pivot * m_secondsPerPixel;
     m_secondsPerPixel *= pow(1.2, -delta/120.0);
-    m_panx -= event->x() * m_secondsPerPixel;
+    m_panx -= pivot * m_secondsPerPixel;
     this->update();
 }
 
@@ -274,4 +232,35 @@ void DigitalTraceGraph::setInterpolation(interpolation_t v)
 {
     m_interpolation = v;
     this->update();
+}
+
+void DigitalTraceGraph::addChannel(signal_trace_set::channel_id_t id, QString const & name)
+{
+    Channel ch;
+    ch.id = id;
+    ch.name = name;
+    m_channels.append(ch);
+    this->update();
+}
+
+int DigitalTraceGraph::channelCount() const
+{
+    return m_channels.size();
+}
+
+void DigitalTraceGraph::removeChannel(int index)
+{
+    m_channels.removeAt(index);
+    this->update();
+}
+
+void DigitalTraceGraph::clearChannels()
+{
+    m_channels.clear();
+    this->update();
+}
+
+DigitalTraceGraph::Channel const & DigitalTraceGraph::input(int index)
+{
+    return m_channels[index];
 }

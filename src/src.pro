@@ -165,7 +165,8 @@ SOURCES += ui/mainwindow.cpp \
     ui/floatingwidget.cpp \
     ui/floatinginputdialog.cpp \
     LorrisProgrammer/modes/shupitospitunnel.cpp \
-    connection/shupitospitunnelconn.cpp
+    connection/shupitospitunnelconn.cpp \
+    misc/signal_trace.cpp
 
 HEADERS += ui/mainwindow.h \
     revision.h \
@@ -305,7 +306,9 @@ HEADERS += ui/mainwindow.h \
     LorrisAnalyzer/DataWidgets/RotationWidget/rotationwidget.h \
     LorrisAnalyzer/storagedata.h \
     LorrisProgrammer/modes/shupitospitunnel.h \
-    connection/shupitospitunnelconn.h
+    connection/shupitospitunnelconn.h \
+    misc/signal_trace.h \
+    connection/tracelyzerconn.h
 
 FORMS += \
     LorrisAnalyzer/sourcedialog.ui \

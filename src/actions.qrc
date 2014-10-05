@@ -20,5 +20,8 @@
         <file alias="undo">icons/edit-undo.png</file>
         <file alias="pause">icons/media-playback-pause.png</file>
         <file alias="search">icons/search.png</file>
+        <file>icons/zoom-fit-best.png</file>
+        <file>icons/zoom-in.png</file>
+        <file>icons/zoom-out.png</file>
     </qresource>
 </RCC>

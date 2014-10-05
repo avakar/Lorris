@@ -23,6 +23,7 @@ class ChooseConnectionDlg;
 class Connection;
 class PortConnection;
 class ShupitoConnection;
+class TracelyzerConnection;
 
 class ChooseConnectionDlg : public QDialog
 {
@@ -34,6 +35,7 @@ public:
 
     ConnectionPointer<PortConnection> choosePort(ConnectionPointer<Connection> const & preselectedConn);
     ConnectionPointer<ShupitoConnection> chooseShupito(ConnectionPointer<Connection> const & preselectedConn);
+    ConnectionPointer<TracelyzerConnection> chooseTracelyzer(ConnectionPointer<Connection> const & preselectedConn);
 
     ConnectionPointer<Connection> choose(PrimaryConnectionTypes allowedConns, ConnectionPointer<Connection> const & preselectedConn);
 

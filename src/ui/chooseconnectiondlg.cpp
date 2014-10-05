@@ -11,6 +11,7 @@
 #include "../connection/serialport.h"
 #include "../connection/tcpsocket.h"
 #include "../connection/shupitotunnel.h"
+#include "../connection/omicronanalconn.h"
 #include "../misc/config.h"
 #include <QMenu>
 #include <QPushButton>
@@ -208,6 +209,11 @@ ConnectionPointer<PortConnection> ChooseConnectionDlg::choosePort(ConnectionPoin
 ConnectionPointer<ShupitoConnection> ChooseConnectionDlg::chooseShupito(ConnectionPointer<Connection> const & preselectedConn)
 {
     return this->choose(pct_shupito, preselectedConn).dynamicCast<ShupitoConnection>();
+}
+
+ConnectionPointer<TracelyzerConnection> ChooseConnectionDlg::chooseTracelyzer(ConnectionPointer<Connection> const & preselectedConn)
+{
+    return this->choose(pct_tracelyzer, preselectedConn).dynamicCast<TracelyzerConnection>();
 }
 
 ConnectionPointer<Connection> ChooseConnectionDlg::choose(PrimaryConnectionTypes allowedConns, ConnectionPointer<Connection> const & preselectedConn)
@@ -481,7 +487,8 @@ void ChooseConnectionDlg::on_connectionsList_itemSelectionChanged()
     Q_ASSERT(conn);
 
     bool enabled = ((m_allowedConns & pct_port) && dynamic_cast<PortConnection *>(conn))
-            || ((m_allowedConns & pct_shupito) && dynamic_cast<ShupitoConnection *>(conn));
+            || ((m_allowedConns & pct_shupito) && dynamic_cast<ShupitoConnection *>(conn))
+            || ((m_allowedConns & pct_tracelyzer && dynamic_cast<TracelyzerConnection *>(conn)));
 
 #ifdef HAVE_LIBYB
     if (!enabled && (m_allowedConns & (pct_flip | pct_stm32link)))
