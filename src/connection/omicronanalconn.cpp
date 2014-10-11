@@ -13,15 +13,6 @@ static yb::usb_control_code_t const cmd_get_config = { 0xc1, 0x06 };
 static yb::usb_control_code_t const cmd_unchoke = { 0xc1, 0x07 };
 static yb::usb_control_code_t const cmd_move_choke = { 0x41, 0x08 };
 
-template <typename T>
-static T load(QFile & file)
-{
-    T res;
-    if (file.read((char *)&res, sizeof res) != sizeof res)
-        throw 1;
-    return res;
-}
-
 OmicronAnalyzerConnection::OmicronAnalyzerConnection(yb::async_runner & runner)
     : TracelyzerConnection(CONNECTION_OMICRON_ANALYZER), m_runner(runner)
 {
@@ -336,12 +327,6 @@ void OmicronAnalyzerConnection::stopTrace()
     m_read_loop.wait(yb::cl_quit);
 
     m_runner.run(m_intf.device().control_write(cmd_stop, 0, m_intf.interface_index(), 0, 0));
-}
-
-template <typename T>
-static void store(QFile & file, T t)
-{
-    file.write((char const *)&t, sizeof t);
 }
 
 void OmicronAnalyzerConnection::readChannelReceive()
