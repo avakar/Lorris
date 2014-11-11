@@ -21,10 +21,9 @@ OmicronAnalyzerConnection::OmicronAnalyzerConnection(yb::async_runner & runner)
         "ch4", "ch5", "ch6", "ch7",
         "ch8", "ch9", "ch10", "ch11",
         "ch12", "ch13", "ch14", "ch15",
-        "usb_tx_se0", "usb_tx_j", "usb_tx_en",
-        "usb_rx_se0", "usb_rx_j", "usb_pullup"
-        "usb_dn", "usb_dp",
+        "usb_tx_en", "usb_rx_se0", "usb_rx_j", "usb_dn", "usb_dp",
         "spi_miso", "spi_mosi", "spi_clk", "spi_cs",
+        "pic_data", "pic_clk", "pic_mclr_n",
         "clk_24", "clk_33"
     };
 
@@ -66,7 +65,7 @@ void OmicronAnalyzerConnection::setup(yb::usb_device_interface const & intf, Shu
 
     m_intf = intf;
 
-    assert(desc.endpoints.size() == 3);
+    //assert(desc.endpoints.size() == 3);
     m_out_ep = desc.endpoints[1].bEndpointAddress;
     m_out_ep_size = desc.endpoints[1].wMaxPacketSize;
     m_in_ep = desc.endpoints[0].bEndpointAddress;
@@ -266,6 +265,8 @@ yb::task<void> OmicronAnalyzerConnection::readMem()
             total_len &= 0x1ffffff;
             uint32_t len = (std::min)(total_len, sizeof m_buffer);
             assert((len % 64) == 0);
+            assert(len != 0);
+            assert(len <= sizeof m_buffer);
             return m_intf.device().bulk_read(m_in_ep, m_buffer, len).then([this](size_t r){
                 uint32_t aligned_addr = (m_start_addr & ~31);
                 uint32_t total_len = (m_end_addr - aligned_addr) * 2;
@@ -384,7 +385,7 @@ void OmicronAnalyzerConnection::storeSample(uint16_t sample, signal_trace::block
         for (size_t i = 0; i < m_rounded_channel_count; ++i)
         {
             if (i < m_open_traces.size())
-                m_open_traces[i]->data.push_back((tmp & 1) == 0);
+                m_open_traces[i]->data.push_back((tmp & 1) != 0);
             tmp >>= 1;
         }
     }
@@ -399,7 +400,10 @@ void OmicronAnalyzerConnection::storeBi(signal_trace::block_info & bi)
 
     for (size_t i = 0; i < m_open_traces.size(); ++i)
     {
-        assert(m_open_traces[i]->blocks.find(m_sample_index) == m_open_traces[i]->blocks.end());
+        if (!(m_open_traces[i]->blocks.find(m_sample_index) == m_open_traces[i]->blocks.end()))
+        {
+            assert(0);
+        }
         m_open_traces[i]->blocks[m_sample_index] = bi;
     }
     m_sample_index += bi.block_length * bi.repeat_count;
@@ -479,6 +483,7 @@ void OmicronAnalyzerConnection::processData(std::vector<std::pair<uint64_t, std:
             case st_prefirst:
                 this->storeSample(sample, bi);
                 m_compress_state = st_idle;
+                m_compress_sample = sample;
                 break;
             case st_idle:
                 if (m_compress_sample == sample)
@@ -500,6 +505,7 @@ void OmicronAnalyzerConnection::processData(std::vector<std::pair<uint64_t, std:
                 else
                 {
                     this->storeSample(sample, bi);
+                    m_compress_sample = sample;
                 }
                 break;
             case st_count:
@@ -520,8 +526,6 @@ void OmicronAnalyzerConnection::processData(std::vector<std::pair<uint64_t, std:
                 }
                 break;
             }
-
-            m_compress_sample = sample;
         }
 
         if (bi.block_length != 0)
@@ -542,8 +546,9 @@ std::vector<signal_trace_set::channel_id_t> OmicronAnalyzerConnection::defaultIn
     //    res.push_back(id);
 
     // XXX
-    res.push_back(20);
-    res.push_back(19);
+    res.push_back(25);
+    res.push_back(26);
+    res.push_back(27);
 
     return res;
 }
