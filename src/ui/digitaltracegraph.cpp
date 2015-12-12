@@ -14,7 +14,7 @@ static size_t clamp(double v)
 }
 
 DigitalTraceGraph::DigitalTraceGraph(QWidget *parent)
-    : QWidget(parent), m_trace_set(0), m_panx(row_header_width*-0.003), m_secondsPerPixel(0.003), m_interpolation(i_point)
+    : QWidget(parent), m_trace_set(0), m_panx(row_header_width*-0.003), m_secondsPerPixel(0.003), m_sel_start(0), m_sel_end(0), m_interpolation(i_point)
 {
     this->setMouseTracking(true);
 }
@@ -25,11 +25,81 @@ void DigitalTraceGraph::setTraceSet(signal_trace_set const * trace_set)
     this->update();
 }
 
+static QString timeToString(double time_s, int time_scale_rank)
+{
+    QString res;
+
+    if (time_scale_rank <= -12)
+    {
+        res = "%1 ps";
+        time_s *= 1e12;
+    }
+    else if (time_scale_rank <= -9)
+    {
+        res = "%1 ns";
+        time_s *= 1e9;
+    }
+    else if (time_scale_rank <= -6)
+    {
+        res = "%1 us";
+        time_s *= 1e6;
+    }
+    else if (time_scale_rank <= -3)
+    {
+        res = "%1 ms";
+        time_s *= 1e3;
+    }
+    else
+    {
+        res = "%1 s";
+    }
+
+    return res.arg(time_s, 0, 'f', 3);
+}
+
 void DigitalTraceGraph::paintEvent(QPaintEvent * event)
 {
+    static const int max_square_px = 200;
+
     QPainter p(this);
     p.fillRect(event->rect(), QColor(0, 0, 64));
-    p.setPen(QColor(Qt::white));
+
+    int sel_left = (m_sel_start - m_panx) / m_secondsPerPixel;
+    int sel_right = (m_sel_end - m_panx) / m_secondsPerPixel;
+
+    if (sel_left > sel_right)
+        std::swap(sel_left, sel_right);
+    if (sel_left < 0)
+        sel_left = 0;
+    if (sel_right > this->width())
+        sel_right = this->width();
+    p.fillRect(sel_left, 0, sel_right - sel_left, this->height(), QColor(32, 32, 64));
+
+    int square_rank = (int)floor(log10(m_secondsPerPixel * max_square_px));
+    double square_size = pow(10, square_rank);
+
+    double right_sq = ceil((this->width()*m_secondsPerPixel + m_panx) / square_size);
+    for (double cur = floor(m_panx / square_size); cur <= right_sq; cur += 1)
+    {
+        int x = (int)((cur*square_size - m_panx)/m_secondsPerPixel);
+        if (x > row_header_width) {
+            bool major = (int)cur % 10 == 0;
+            p.setPen(major? QColor(128, 128, 128): QColor(64, 64, 64));
+            p.drawLine(x, 0, x, this->height());
+        }
+    }
+
+    p.setPen(Qt::white);
+    if (m_sel_start == m_sel_end)
+    {
+        p.drawText(2, this->height() - 10, QString("%1").arg(timeToString(m_lastCursorPos.x()*m_secondsPerPixel+m_panx, square_rank)));
+    }
+    else
+    {
+        p.drawText(2, this->height() - 10, QString("%1, %2")
+            .arg(timeToString(m_lastCursorPos.x()*m_secondsPerPixel+m_panx, square_rank))
+            .arg(timeToString(std::abs(m_sel_end - m_sel_start), square_rank)));
+    }
 
     int row_height = 32;
     int row_padding = 2;
@@ -44,6 +114,10 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
     for (int channel_no = 0; channel_no != m_channels.size(); ++channel_no)
     {
         p.setClipping(false);
+
+        p.setPen(QColor(0, 0, 128));
+        p.drawLine(row_header_width, y + row_height, this->width(), y + row_height);
+        p.setPen(QColor(Qt::white));
 
         auto const & channel = m_channels[channel_no];
         p.drawText(2, y + row_height, channel.name);
@@ -139,7 +213,6 @@ void DigitalTraceGraph::paintEvent(QPaintEvent * event)
     }
 
     p.setClipping(false);
-    p.drawText(2, this->height() - 10, QString("seconds/px: %1, panx: %3, x: %2").arg(m_secondsPerPixel, 0, 'f', 15).arg(m_lastCursorPos.x()).arg(m_panx));
 }
 
 void DigitalTraceGraph::zoomToAll()
@@ -183,6 +256,12 @@ void DigitalTraceGraph::zoomToAll()
 void DigitalTraceGraph::mousePressEvent(QMouseEvent * event)
 {
     if (event->button() == Qt::LeftButton)
+    {
+        m_sel_start = m_sel_end = event->pos().x() * m_secondsPerPixel + m_panx;
+        this->update();
+    }
+
+    if (event->button() == Qt::MiddleButton)
         m_dragBase = event->pos();
 }
 
@@ -192,6 +271,11 @@ void DigitalTraceGraph::mouseMoveEvent(QMouseEvent * event)
     this->update();
 
     if (event->buttons().testFlag(Qt::LeftButton))
+    {
+        m_sel_end = event->pos().x() * m_secondsPerPixel + m_panx;
+    }
+
+    if (event->buttons().testFlag(Qt::MiddleButton))
     {
         QPoint delta = event->pos() - m_dragBase;
         m_panx -= delta.x() * m_secondsPerPixel;

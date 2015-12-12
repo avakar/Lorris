@@ -50,6 +50,8 @@ private:
     double m_panx;
     double m_secondsPerPixel;
 
+    double m_sel_start, m_sel_end;
+
     interpolation_t m_interpolation;
 
     QPoint m_dragBase;
