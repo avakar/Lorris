@@ -129,6 +129,9 @@ SOURCES += ui/mainwindow.cpp \
     LorrisAnalyzer/undoactions.cpp \
     LorrisAnalyzer/filtertabwidget.cpp \
     LorrisAnalyzer/datafilter.cpp \
+    LorrisOmicron/lorrisomicron.cpp \
+    LorrisOmicron/lorrisomicroninfo.cpp \
+    ui/digitaltracegraph.cpp \
     misc/threadchannel.cpp \
     ui/hookedlineedit.cpp \
     LorrisProgrammer/shupitopacket.cpp \
@@ -162,7 +165,8 @@ SOURCES += ui/mainwindow.cpp \
     ui/floatingwidget.cpp \
     ui/floatinginputdialog.cpp \
     LorrisProgrammer/modes/shupitospitunnel.cpp \
-    connection/shupitospitunnelconn.cpp
+    connection/shupitospitunnelconn.cpp \
+    misc/signal_trace.cpp
 
 HEADERS += ui/mainwindow.h \
     revision.h \
@@ -266,6 +270,9 @@ HEADERS += ui/mainwindow.h \
     LorrisAnalyzer/undoactions.h \
     LorrisAnalyzer/filtertabwidget.h \
     LorrisAnalyzer/datafilter.h \
+    LorrisOmicron/lorrisomicron.h \
+    LorrisOmicron/lorrisomicroninfo.h \
+    ui/digitaltracegraph.h \
     misc/threadchannel.h \
     ui/hookedlineedit.h \
     LorrisProgrammer/shupitopacket.h \
@@ -299,7 +306,9 @@ HEADERS += ui/mainwindow.h \
     LorrisAnalyzer/DataWidgets/RotationWidget/rotationwidget.h \
     LorrisAnalyzer/storagedata.h \
     LorrisProgrammer/modes/shupitospitunnel.h \
-    connection/shupitospitunnelconn.h
+    connection/shupitospitunnelconn.h \
+    misc/signal_trace.h \
+    connection/tracelyzerconn.h
 
 FORMS += \
     LorrisAnalyzer/sourcedialog.ui \
@@ -324,6 +333,8 @@ FORMS += \
     LorrisAnalyzer/DataWidgets/GraphWidget/graphmarkerdialog.ui \
     LorrisAnalyzer/DataWidgets/statusmanager.ui \
     LorrisAnalyzer/DataWidgets/formuladialog.ui \
+    LorrisAnalyzer/filterdialog.ui \
+    LorrisOmicron/lorrisomicron.ui \
     LorrisAnalyzer/filterdialog.ui \
     LorrisProgrammer/ui/overvccdialog.ui \
     LorrisProgrammer/ui/miniprogrammerui.ui \
@@ -474,6 +485,7 @@ libyb {
         connection/usbacmconn.cpp \
         connection/usbshupito22conn.cpp \
         connection/usbshupito23conn.cpp \
+        connection/omicronanalconn.cpp \
         LorrisProgrammer/programmers/flipprogrammer.cpp \
         LorrisProgrammer/programmers/stm32programmer.cpp \
         connection/stm32connection.cpp
@@ -483,6 +495,7 @@ libyb {
         connection/usbacmconn.h \
         connection/usbshupito22conn.h \
         connection/usbshupito23conn.h \
+        connection/omicronanalconn.h \
         LorrisProgrammer/programmers/flipprogrammer.h \
         LorrisProgrammer/programmers/stm32programmer.h \
         connection/stm32connection.h \

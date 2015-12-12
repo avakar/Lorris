@@ -19,7 +19,7 @@ public:
 
     QString details() const;
 
-    void setup(yb::usb_device_interface const & intf);
+    void setup(yb::usb_device_interface const & intf, ShupitoDesc const & ybdesc);
     void clear();
 
     void requestDesc();

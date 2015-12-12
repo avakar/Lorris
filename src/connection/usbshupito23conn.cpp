@@ -27,7 +27,7 @@ QString UsbShupito23Connection::details() const
     return m_details;
 }
 
-void UsbShupito23Connection::setup(yb::usb_device_interface const & intf)
+void UsbShupito23Connection::setup(yb::usb_device_interface const & intf, ShupitoDesc const & ybdesc)
 {
     assert(!intf.empty());
     yb::usb_interface const & idesc = intf.descriptor();
@@ -52,18 +52,7 @@ void UsbShupito23Connection::setup(yb::usb_device_interface const & intf)
 
     m_details = formatDeviceDetails(intf.device());
 
-    QByteArray raw_desc;
-    for (size_t i = 0; i < desc.extra_descriptors.size(); ++i)
-    {
-        if (desc.extra_descriptors[i].size() < 2)
-            continue;
-
-        if (desc.extra_descriptors[i][1] == 75)
-            raw_desc.append((char const *)desc.extra_descriptors[i].data() + 2, desc.extra_descriptors[i].size() - 2);
-    }
-
-    m_desc.Clear();
-    m_desc.AddData(raw_desc);
+    m_desc = ybdesc;
     emit descRead(m_desc);
 
     this->markPresent();

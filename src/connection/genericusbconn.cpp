@@ -182,9 +182,35 @@ bool GenericUsbConnection::isShupito20Device(yb::usb_device const & dev)
     return dev.vidpid() == 0x4a61679a;
 }
 
-bool GenericUsbConnection::isShupito23Device(yb::usb_device const & dev)
+bool GenericUsbConnection::isYbIntf(yb::usb_device_interface const & intf, ShupitoDesc & desc)
 {
-    return dev.vidpid() == 0x4a61679c;
+    if (intf.device().vidpid() != 0x4a61679c)
+        return false;
+
+    yb::usb_interface const & intf_desc = intf.descriptor();
+    if (intf_desc.altsettings.size() != 1)
+        return false;
+
+    yb::usb_interface_descriptor const & alt_desc = intf_desc.altsettings[0];
+
+    QByteArray raw_desc;
+    for (size_t i = 0; i < alt_desc.extra_descriptors.size(); ++i)
+    {
+        assert(alt_desc.extra_descriptors[i].size() >= 2);
+        if (alt_desc.extra_descriptors[i][1] == 75)
+            raw_desc.append((char const *)alt_desc.extra_descriptors[i].data() + 2, alt_desc.extra_descriptors[i].size() - 2);
+    }
+
+    try
+    {
+        desc.AddData(raw_desc);
+    }
+    catch (ShupitoDescError const &)
+    {
+        return false;
+    }
+
+    return alt_desc.in_descriptor_count() > 0 && alt_desc.out_descriptor_count() == 1;
 }
 
 bool GenericUsbConnection::isFlipDevice(yb::usb_device const & dev)

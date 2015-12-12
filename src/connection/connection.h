@@ -40,6 +40,7 @@ enum ConnectionType
     CONNECTION_SHUPITO23           = 10,
     CONNECTION_STM32               = 11,
     CONNECTION_SHUPITO_SPI_TUNNEL  = 12,
+    CONNECTION_OMICRON_ANALYZER    = 13,
 
     MAX_CON_TYPE
 };
@@ -51,6 +52,7 @@ enum PrimaryConnectionType {
     pct_port_programmable = (1<<3),
     pct_stm32link = (1<<4),
 
+    pct_tracelyzer = (1<<5),
     pct_programmable = pct_shupito | pct_flip | pct_port_programmable | pct_stm32link,
     pct_port = pct_port_data | pct_port_programmable
 };
